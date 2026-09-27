@@ -29,7 +29,8 @@
 		onRate,
 		onToggleLoop,
 		onEndBehavior,
-		onSeek
+		onScrub,
+		onScrubEnd
 	}: {
 		playing: boolean;
 		rate: number;
@@ -46,12 +47,13 @@
 		onRate: (rate: number) => void;
 		onToggleLoop: () => void;
 		onEndBehavior: (behavior: EndBehavior) => void;
-		onSeek: (time: number) => void;
+		onScrub: (time: number) => void;
+		onScrubEnd: () => void;
 	} = $props();
 
 	let showSpeedSlider = $state(false);
 	let speedButton: HTMLElement;
-	let speedPopup: HTMLElement;
+	let speedPopup = $state<HTMLElement>();
 
 	// Seek bar state
 	let seekBarElement: HTMLElement;
@@ -59,6 +61,7 @@
 	let isDragging = $state(false);
 	let dragStartX = $state(0);
 	let dragStartTime = $state(0);
+	let dragTime = $state(0); // Current time during drag
 
 	// Close popup when clicking outside
 	$effect(() => {
@@ -96,8 +99,11 @@
 		// If clicking directly on the bar (not handle), seek immediately
 		if (event.target === seekBarElement) {
 			const newTime = getTimeFromPosition(event.clientX);
-			onSeek(newTime);
+			dragTime = newTime;
+			onScrub(newTime);
 			dragStartTime = newTime;
+		} else {
+			dragTime = currentTime;
 		}
 		
 		document.addEventListener('pointermove', onSeekBarMove);
@@ -107,11 +113,13 @@
 	function onSeekBarMove(event: PointerEvent) {
 		if (!isDragging || duration <= 0) return;
 		const newTime = getTimeFromPosition(event.clientX);
-		onSeek(newTime);
+		dragTime = newTime;
+		onScrub(newTime);
 	}
 
 	function onSeekBarUp() {
 		isDragging = false;
+		onScrubEnd();
 		document.removeEventListener('pointermove', onSeekBarMove);
 		document.removeEventListener('pointerup', onSeekBarUp);
 	}
@@ -129,18 +137,22 @@
 			aria-label="Seek position"
 			aria-valuemin={0}
 			aria-valuemax={duration}
-			aria-valuenow={currentTime}
+			aria-valuenow={isDragging ? dragTime : currentTime}
+			tabindex="0"
 		>
 			<div 
 				class="progress-fill" 
-				style="width: {duration > 0 ? (currentTime / duration) * 100 : 0}%"
+				style="width: {duration > 0 ? ((isDragging ? dragTime : currentTime) / duration) * 100 : 0}%"
 			></div>
 			<div 
 				class="progress-handle"
 				bind:this={seekHandleElement}
 				class:dragging={isDragging}
-				style="left: {duration > 0 ? (currentTime / duration) * 100 : 0}%"
+				style="left: {duration > 0 ? ((isDragging ? dragTime : currentTime) / duration) * 100 : 0}%"
 				onpointerdown={onSeekBarDown}
+				role="button"
+				aria-label="Seek handle"
+				tabindex="0"
 			></div>
 		</div>
 	</div>

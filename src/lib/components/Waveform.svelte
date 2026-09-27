@@ -41,6 +41,7 @@
 	let touchStartDistance = $state(0);
 	let touchStartZoom = $state(1);
 	let touchStartPan = $state(0);
+	let touchStartCenter = $state(0);
 	let activeTouches = $state(0);
 	let followPlayhead = $state(false);
 	
@@ -332,11 +333,12 @@
 		activeTouches = event.touches.length;
 		
 		if (event.touches.length === 2) {
-			// Two finger gesture - pinch zoom
+			// Two finger gesture - pinch zoom and pan
 			event.preventDefault();
 			touchStartDistance = getTouchDistance(event.touches);
 			touchStartZoom = zoomLevel;
 			touchStartPan = panOffset;
+			touchStartCenter = getTouchCenter(event.touches);
 		}
 	}
 
@@ -352,12 +354,20 @@
 			// Calculate pan based on touch center movement
 			const rect = canvas?.getBoundingClientRect();
 			if (rect) {
-				const centerX = getTouchCenter(event.touches);
-				const centerRatio = (centerX - rect.left) / rect.width;
-				const centerTime = touchStartPan + centerRatio * (duration / touchStartZoom);
+				const currentCenter = getTouchCenter(event.touches);
+				
+				// Calculate how far the touch center has moved in pixels
+				const centerDeltaX = currentCenter - touchStartCenter;
+				
+				// Convert pixel movement to time delta
+				const timeDelta = (centerDeltaX / rect.width) * (duration / touchStartZoom);
+				
+				// Apply the movement: subtract because we want natural pan direction
+				// (when you drag right, you want to see earlier content on the left)
+				const newPanOffset = touchStartPan - timeDelta;
 				
 				zoomLevel = newZoom;
-				panOffset = clamp(centerTime - (duration / newZoom) / 2, 0, duration - (duration / newZoom));
+				panOffset = clamp(newPanOffset, 0, duration - (duration / newZoom));
 			}
 		}
 	}
@@ -366,6 +376,7 @@
 		activeTouches = event.touches.length;
 		if (event.touches.length === 0) {
 			touchStartDistance = 0;
+			touchStartCenter = 0;
 		}
 	}
 

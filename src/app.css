@@ -82,6 +82,26 @@ a {
 	background:
 		radial-gradient(1200px 400px at 50% -10%, var(--accent-rgba-08), transparent 55%),
 		var(--bg);
+	user-select: none;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+}
+
+/* Allow text selection only in text inputs */
+.app-screen input[type="text"],
+.app-screen input[type="email"],
+.app-screen input[type="password"],
+.app-screen input[type="search"],
+.app-screen input[type="url"],
+.app-screen textarea,
+.app-screen .title-input,
+.app-screen .text-input,
+.app-screen .cue-name-input {
+	user-select: text;
+	-webkit-user-select: text;
+	-moz-user-select: text;
+	-ms-user-select: text;
 }
 
 .topbar {

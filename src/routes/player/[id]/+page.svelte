@@ -114,6 +114,19 @@
 		syncWide();
 		media.addEventListener('change', syncWide);
 
+		// Lock orientation to portrait
+		const lockOrientation = async () => {
+			try {
+				if (screen.orientation && screen.orientation.lock) {
+					await screen.orientation.lock('portrait');
+				}
+			} catch (error) {
+				// Orientation lock failed (might not be supported)
+				console.log('Orientation lock not supported');
+			}
+		};
+		lockOrientation();
+
 		// Force CSS recalculation on resize (fixes mobile viewport issues)
 		const forceRecalc = () => {
 			document.documentElement.style.setProperty('--force-recalc', Math.random().toString());
@@ -398,15 +411,10 @@
 		isDragging = true;
 		dragStartY = event.touches[0].clientY;
 		dragStartExpanded = cueListExpanded;
-		// Prevent default to avoid unwanted scrolling behavior
-		event.preventDefault();
 	}
 
 	function onTouchMove(event: TouchEvent) {
 		if (!isDragging) return;
-		
-		// Prevent default scrolling behavior
-		event.preventDefault();
 		
 		const currentY = event.touches[0].clientY;
 		const deltaY = dragStartY - currentY; // Positive = drag up, Negative = drag down
@@ -536,16 +544,18 @@
 			<section 
 				class="cue-list-section" 
 				class:expanded={cueListExpanded} 
-				onclick={(event) => {
-					const target = event.target as HTMLElement;
-					if (target.closest('button') || target.closest('input')) return;
-					cueListExpanded = !cueListExpanded;
-				}}
 				ontouchstart={onTouchStart}
 				ontouchmove={onTouchMove}
 				ontouchend={onTouchEnd}
 			>
-				<div class="cue-list-header">
+				<div 
+					class="cue-list-header"
+					onclick={(event) => {
+						const target = event.target as HTMLElement;
+						if (target.closest('button')) return;
+						cueListExpanded = !cueListExpanded;
+					}}
+				>
 					<h2>Cues</h2>
 					<div class="expand-btn">
 						{#if cueListExpanded}
@@ -594,7 +604,8 @@
 			onRate={(rate) => commit((current) => ({ ...current, rate }))}
 			onToggleLoop={toggleLoop}
 			onEndBehavior={(endBehavior: EndBehavior) => commit((current) => ({ ...current, endBehavior }))}
-			onSeek={(time) => engine?.goTo(time)}
+			onScrub={(time) => engine?.seek(time, { scrubbing: true })}
+			onScrubEnd={() => engine?.endScrub()}
 		/>
 	{/if}
 	<input bind:this={fileInput} type="file" accept={AUDIO_ACCEPT} hidden onchange={onFileInput} />
@@ -626,6 +637,9 @@
 		height: 100dvh;
 		max-height: 100dvh;
 		background: linear-gradient(135deg, var(--bg) 0%, var(--accent-rgba-01) 100%);
+		overflow: hidden;
+		touch-action: none;
+		overscroll-behavior: none;
 	}
 
 	.player-body {
@@ -746,7 +760,7 @@
 
 	.cue-list-section {
 		position: fixed;
-		top: calc(100dvh - 280px - var(--safe-bottom));
+		top: calc(100dvh - 260px - var(--safe-bottom));
 		left: 0;
 		right: 0;
 		bottom: calc(184px + var(--safe-bottom));
@@ -818,6 +832,8 @@
 		flex: 1;
 		overflow: auto;
 		padding: 4px 0;
+		touch-action: pan-y;
+		overscroll-behavior: contain;
 	}
 
 	.expand-btn {
