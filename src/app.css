@@ -28,6 +28,25 @@
 	font-family: var(--font);
 	background: var(--bg);
 	color: var(--text);
+	/* Full-height unit for the app shell. Overridden below per display mode. */
+	--app-height: 100vh;
+}
+
+/* In a browser tab, 100vh overshoots behind the toolbar; prefer the dynamic unit. */
+@supports (height: 100dvh) {
+	:root {
+		--app-height: 100dvh;
+	}
+}
+
+/* In an iOS home-screen PWA the small/dynamic viewport units (and position: fixed)
+   resolve on first paint to the screen minus the status-bar inset and only correct
+   themselves after a scroll (WebKit bug 254868). That leaves a dead band under
+   bottom-anchored UI. 100vh reports the real screen height there, so use it. */
+@media (display-mode: standalone) {
+	:root {
+		--app-height: 100vh;
+	}
 }
 
 * {
@@ -49,7 +68,7 @@ body {
 }
 
 body {
-	min-height: 100dvh;
+	min-height: var(--app-height);
 	overscroll-behavior: none;
 	-webkit-tap-highlight-color: transparent;
 	/* Additional zoom prevention */
@@ -86,7 +105,7 @@ a {
 }
 
 .app-screen {
-	min-height: 100dvh;
+	min-height: var(--app-height);
 	display: flex;
 	flex-direction: column;
 	padding-top: var(--safe-top);

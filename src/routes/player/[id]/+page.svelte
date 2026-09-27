@@ -116,68 +116,6 @@
 		syncWide();
 		media.addEventListener('change', syncWide);
 
-		// Fix transport positioning and viewport issues
-		const fixTransportPositioning = () => {
-			const transport = document.querySelector('.transport');
-			if (!transport) return;
-
-			// Force a layout recalculation
-			document.body.offsetHeight;
-
-			// Check if transport has correct positioning
-			const rect = transport.getBoundingClientRect();
-			const windowHeight = window.innerHeight;
-			const documentHeight = document.documentElement.clientHeight;
-			
-			// Use the more reliable height measurement
-			const viewportHeight = Math.min(windowHeight, documentHeight);
-			
-			// Check if transport is positioned correctly at the bottom
-			const transportBottom = rect.bottom;
-			const expectedBottom = viewportHeight;
-			const tolerance = 10; // Allow small differences
-			
-			if (Math.abs(transportBottom - expectedBottom) > tolerance) {
-				// Force correct positioning
-				transport.style.position = 'fixed';
-				transport.style.bottom = '0';
-				transport.style.left = '0';
-				transport.style.right = '0';
-				transport.style.transform = 'translateZ(0)';
-				
-				// Trigger another layout recalculation
-				transport.offsetHeight;
-			}
-		};
-
-		// Force initial viewport size calculation
-		const forceViewportRecalc = () => {
-			// Force CSS custom property recalculation
-			document.documentElement.style.setProperty('--actual-vh', `${window.innerHeight * 0.01}px`);
-			
-			// Force layout recalculation
-			document.body.offsetHeight;
-			
-			// Run transport fix
-			fixTransportPositioning();
-		};
-
-		// Run fixes immediately and multiple times to catch timing issues
-		forceViewportRecalc();
-		requestAnimationFrame(forceViewportRecalc);
-		
-		// Run on various events
-		window.addEventListener('resize', fixTransportPositioning);
-		window.addEventListener('orientationchange', fixTransportPositioning);
-		window.addEventListener('scroll', fixTransportPositioning, { once: true });
-		
-		// Run with delays to catch various rendering stages
-		setTimeout(forceViewportRecalc, 0);
-		setTimeout(forceViewportRecalc, 50);
-		setTimeout(forceViewportRecalc, 150);
-		setTimeout(forceViewportRecalc, 300);
-		setTimeout(forceViewportRecalc, 600);
-
 		// Enhanced orientation locking
 		const lockOrientation = async () => {
 			try {
@@ -224,21 +162,9 @@
 		window.addEventListener('orientationchange', handleOrientationChange);
 		screen.orientation?.addEventListener('change', handleOrientationChange);
 
-		// Force CSS recalculation on resize (fixes mobile viewport issues)
-		const forceRecalc = () => {
-			document.documentElement.style.setProperty('--force-recalc', Math.random().toString());
-		};
-		window.addEventListener('resize', forceRecalc);
-		window.addEventListener('orientationchange', forceRecalc);
-
 		return () => {
 			unsubscribe?.();
 			media.removeEventListener('change', syncWide);
-			window.removeEventListener('resize', forceRecalc);
-			window.removeEventListener('orientationchange', forceRecalc);
-			window.removeEventListener('resize', fixTransportPositioning);
-			window.removeEventListener('orientationchange', fixTransportPositioning);
-			window.removeEventListener('scroll', fixTransportPositioning);
 			window.removeEventListener('orientationchange', handleOrientationChange);
 			screen.orientation?.removeEventListener('change', handleOrientationChange);
 			engine?.destroy();
@@ -772,20 +698,17 @@
 
 <style>
 	.player {
-		height: 100dvh;
-		max-height: 100dvh;
+		/* Containing block for the transport, cue drawer and popup. They are
+		   anchored to this shell (position: absolute) rather than the viewport
+		   (position: fixed) because the viewport lies about its height on first
+		   paint in an iOS home-screen PWA; see --app-height in app.css. */
+		position: relative;
+		height: var(--app-height);
+		max-height: var(--app-height);
 		background: linear-gradient(135deg, var(--bg) 0%, var(--accent-rgba-01) 100%);
 		overflow: hidden;
 		touch-action: none;
 		overscroll-behavior: none;
-	}
-
-	/* Fallback height calculation for problematic browsers */
-	@supports not (height: 100dvh) {
-		.player {
-			height: calc(var(--actual-vh, 1vh) * 100);
-			max-height: calc(var(--actual-vh, 1vh) * 100);
-		}
 	}
 
 	.player-body {
@@ -905,7 +828,7 @@
 	}
 
 	.cue-list-section {
-		position: fixed;
+		position: absolute;
 		left: 0;
 		right: 0;
 		bottom: calc(188px + var(--safe-bottom)); /* Match transport height exactly */
@@ -925,7 +848,7 @@
 		overscroll-behavior: contain;
 		/* Let collapsed height be determined by content */
 		height: auto;
-		max-height: 80px; /* Limit collapsed height */
+		max-height: 58px; /* Just enough for header (38px) + top padding (20px) */
 	}
 
 	.cue-list-section.expanded {
@@ -988,6 +911,11 @@
 		padding: 4px 0;
 		touch-action: pan-y;
 		overscroll-behavior: contain;
+	}
+
+	/* Hide cue list content when collapsed */
+	.cue-list-section:not(.expanded) .cue-list-container {
+		display: none;
 	}
 
 	/* Disable scrolling during drawer drag */
@@ -1060,7 +988,7 @@
 
 	/* Attach Audio Popup */
 	.popup-overlay {
-		position: fixed;
+		position: absolute;
 		top: 0;
 		left: 0;
 		right: 0;

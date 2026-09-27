@@ -265,7 +265,8 @@
 
 <style>
 	.transport {
-		position: fixed;
+		/* Anchored to the .player shell, not the viewport (see .player). */
+		position: absolute;
 		bottom: 0;
 		left: 0;
 		right: 0;
@@ -391,8 +392,8 @@
 	}
 
 	.control-btn.active {
-		background: rgba(226, 255, 87, 0.15);
-		border-color: rgba(226, 255, 87, 0.4);
+		background: var(--accent-rgba-15);
+		border-color: var(--accent-rgba-40);
 		color: var(--accent);
 	}
 
@@ -430,13 +431,13 @@
 		justify-content: center;
 		margin: 0 8px;
 		transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-		box-shadow: 0 4px 16px rgba(226, 255, 87, 0.3);
-		border: 2px solid rgba(226, 255, 87, 0.4);
+		box-shadow: 0 4px 16px var(--accent-rgba-30);
+		border: 2px solid var(--accent-rgba-40);
 	}
 
 	.play-btn:hover:not(:disabled) {
 		transform: translateY(-2px);
-		box-shadow: 0 6px 20px rgba(226, 255, 87, 0.4);
+		box-shadow: 0 6px 20px var(--accent-rgba-40);
 	}
 
 	.play-btn:active {
@@ -517,8 +518,8 @@
 	}
 
 	.preset-btn.active {
-		background: rgba(226, 255, 87, 0.2);
-		border-color: rgba(226, 255, 87, 0.4);
+		background: var(--accent-rgba-20);
+		border-color: var(--accent-rgba-40);
 		color: var(--accent);
 	}
 
