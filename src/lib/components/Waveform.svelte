@@ -382,6 +382,9 @@
 
 	// Cue interaction state
 	let cueDragMoved = $state(false);
+	let dragTimer = $state<number | null>(null);
+	let isDragReady = $state(false);
+	let dragHoldThreshold = 250; // ms to hold before drag activates
 
 	// Handle cue click vs drag
 	function handleCueClick(event: MouseEvent, cue: Cue) {
@@ -397,15 +400,34 @@
 		if (event.button !== 0) return;
 		
 		event.stopPropagation();
+		
+		// Clear any existing timer
+		if (dragTimer) {
+			clearTimeout(dragTimer);
+			dragTimer = null;
+		}
+		
+		// Set up drag preparation (but don't start dragging yet)
 		draggedCue = cue.id;
 		dragStartX = event.clientX;
 		dragStartTime = cue.time;
 		cueDragMoved = false;
+		isDragReady = false;
+		
 		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+		
+		// Start timer to enable dragging after delay
+		dragTimer = setTimeout(() => {
+			isDragReady = true;
+			dragTimer = null;
+		}, dragHoldThreshold);
 	}
 
 	function moveCueDrag(event: PointerEvent) {
 		if (!draggedCue || !canvas || !onmove) return;
+		
+		// Only allow dragging if hold threshold has been met
+		if (!isDragReady) return;
 		
 		// Mark that we've moved (not just a click)
 		const dx = Math.abs(event.clientX - dragStartX);
@@ -423,6 +445,12 @@
 
 	function endCueDrag(event: PointerEvent) {
 		if (draggedCue) {
+			// Clear timer if still running
+			if (dragTimer) {
+				clearTimeout(dragTimer);
+				dragTimer = null;
+			}
+			
 			(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
 			
 			// Prevent click event if we dragged
@@ -431,6 +459,7 @@
 			}
 			
 			draggedCue = null;
+			isDragReady = false;
 		}
 	}
 
@@ -485,7 +514,9 @@
 				<button
 					type="button"
 					class="cue-btn"
-					class:dragging={draggedCue === cue.id || isDragging || panBarDragging || followPlayhead}
+					class:dragging={draggedCue === cue.id && cueDragMoved}
+					class:preparing-drag={draggedCue === cue.id && !isDragReady && dragTimer !== null}
+					class:disabled-by-drag={isDragging || panBarDragging || followPlayhead}
 					style:left="{((cue.time - visibleStart) / visibleDuration) * 100}%"
 					style:--cue-color={cue.color}
 					title="{cue.name} - {cue.time.toFixed(1)}s"
@@ -720,11 +751,35 @@
 		z-index: 1;
 	}
 
+	.cue-btn.preparing-drag {
+		animation: drag-prepare 0.25s ease-out forwards;
+		z-index: 1;
+	}
+
 	.cue-btn.dragging {
 		transition: none;
 		z-index: 2;
 		cursor: grabbing;
 		transform: translateX(-50%) translateY(-1px) scale(1.05);
+	}
+
+	.cue-btn.disabled-by-drag {
+		opacity: 0.5;
+		pointer-events: none;
+	}
+
+	@keyframes drag-prepare {
+		0% {
+			transform: translateX(-50%) scale(1);
+		}
+		50% {
+			transform: translateX(-50%) scale(1.02);
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+		}
+		100% {
+			transform: translateX(-50%) scale(1.05);
+			box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+		}
 	}
 
 	.pan-indicator {

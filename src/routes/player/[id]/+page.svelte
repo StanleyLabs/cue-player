@@ -178,18 +178,51 @@
 		setTimeout(forceViewportRecalc, 300);
 		setTimeout(forceViewportRecalc, 600);
 
-		// Lock orientation to portrait
+		// Enhanced orientation locking
 		const lockOrientation = async () => {
 			try {
+				// Method 1: Modern Screen Orientation API
 				if (screen.orientation && screen.orientation.lock) {
 					await screen.orientation.lock('portrait');
+					console.log('Orientation locked via Screen Orientation API');
+					return;
 				}
 			} catch (error) {
-				// Orientation lock failed (might not be supported)
-				console.log('Orientation lock not supported');
+				console.log('Screen Orientation API failed:', error);
 			}
+
+			try {
+				// Method 2: Legacy screen.lockOrientation (Android)
+				const legacyLock = screen.lockOrientation || 
+					screen.mozLockOrientation || 
+					screen.msLockOrientation;
+				if (legacyLock) {
+					legacyLock('portrait');
+					console.log('Orientation locked via legacy API');
+					return;
+				}
+			} catch (error) {
+				console.log('Legacy orientation API failed:', error);
+			}
+
+			// Method 3: CSS and meta tags (already added)
+			console.log('Using CSS and meta tag orientation hints');
 		};
+
+		// Try to lock orientation immediately and on various events
 		lockOrientation();
+		
+		// Also try after delays in case APIs aren't ready immediately
+		setTimeout(lockOrientation, 100);
+		setTimeout(lockOrientation, 1000);
+		
+		// Re-lock when orientation changes
+		const handleOrientationChange = () => {
+			setTimeout(lockOrientation, 100);
+		};
+		
+		window.addEventListener('orientationchange', handleOrientationChange);
+		screen.orientation?.addEventListener('change', handleOrientationChange);
 
 		// Force CSS recalculation on resize (fixes mobile viewport issues)
 		const forceRecalc = () => {
@@ -206,6 +239,8 @@
 			window.removeEventListener('resize', fixTransportPositioning);
 			window.removeEventListener('orientationchange', fixTransportPositioning);
 			window.removeEventListener('scroll', fixTransportPositioning);
+			window.removeEventListener('orientationchange', handleOrientationChange);
+			screen.orientation?.removeEventListener('change', handleOrientationChange);
 			engine?.destroy();
 			revokeUrl();
 		};
@@ -871,10 +906,9 @@
 
 	.cue-list-section {
 		position: fixed;
-		top: calc(100dvh - 260px - var(--safe-bottom));
 		left: 0;
 		right: 0;
-		bottom: calc(184px + var(--safe-bottom));
+		bottom: calc(188px + var(--safe-bottom)); /* Match transport height exactly */
 		z-index: 5;
 		display: flex;
 		flex-direction: column;
@@ -889,10 +923,16 @@
 		/* Prevent scroll interference during drag */
 		touch-action: none;
 		overscroll-behavior: contain;
+		/* Let collapsed height be determined by content */
+		height: auto;
+		max-height: 80px; /* Limit collapsed height */
 	}
 
 	.cue-list-section.expanded {
 		top: 74px;
+		bottom: calc(188px + var(--safe-bottom)); /* Keep same bottom position */
+		height: auto; /* Fill between top and bottom */
+		max-height: none; /* Remove collapsed height limit */
 		border-radius: 0;
 		border-left: none;
 		border-right: none;
