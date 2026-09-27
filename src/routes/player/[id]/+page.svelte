@@ -113,9 +113,19 @@
 		};
 		syncWide();
 		media.addEventListener('change', syncWide);
+
+		// Force CSS recalculation on resize (fixes mobile viewport issues)
+		const forceRecalc = () => {
+			document.documentElement.style.setProperty('--force-recalc', Math.random().toString());
+		};
+		window.addEventListener('resize', forceRecalc);
+		window.addEventListener('orientationchange', forceRecalc);
+
 		return () => {
 			unsubscribe?.();
 			media.removeEventListener('change', syncWide);
+			window.removeEventListener('resize', forceRecalc);
+			window.removeEventListener('orientationchange', forceRecalc);
 			engine?.destroy();
 			revokeUrl();
 		};
