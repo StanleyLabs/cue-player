@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { afterNavigate, goto } from '$app/navigation';
 	import { enablePlaybackSession } from '$lib/audio/engine';
-	import { pickAudioFile } from '$lib/files/pick';
+	import { AUDIO_ACCEPT, isAudioFile, NOT_AUDIO_MESSAGE, pickAudioFile } from '$lib/files/pick';
 	import { formatTime } from '$lib/format';
 	import { recallFile } from '$lib/storage/session';
 	import { deletePiece, downloadBackup, importBackup, listPieces, mutatePiece, openAudioFile } from '$lib/storage/library';
@@ -129,6 +129,11 @@
 	}
 
 	async function ingest(file: File) {
+		if (!isAudioFile(file)) {
+			error = NOT_AUDIO_MESSAGE;
+			message = '';
+			return;
+		}
 		busy = true;
 		error = '';
 		message = 'Reading audio…';
@@ -294,7 +299,7 @@
 			</ul>
 		{/if}
 	</main>
-	<input bind:this={audioInput} type="file" accept="audio/*" hidden onchange={onAudioInput} />
+	<input bind:this={audioInput} type="file" accept={AUDIO_ACCEPT} hidden onchange={onAudioInput} />
 	<input bind:this={backupInput} type="file" accept="application/json,.json" hidden onchange={onBackupInput} />
 </div>
 

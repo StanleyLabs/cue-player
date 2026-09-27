@@ -13,7 +13,7 @@
 	import { computePeaks, type Peaks } from '$lib/audio/peaks';
 	import { nextCueColor, nextCueName, smartCueColor } from '$lib/cues/names';
 	import { phraseBounds } from '$lib/cues/phrase';
-	import { pickAudioFile } from '$lib/files/pick';
+	import { AUDIO_ACCEPT, isAudioFile, NOT_AUDIO_MESSAGE, pickAudioFile } from '$lib/files/pick';
 	import { clamp, formatTime, roundTime } from '$lib/format';
 	import { recallFile, rememberFile } from '$lib/storage/session';
 	import { hashFile } from '$lib/storage/hash';
@@ -180,6 +180,10 @@
 
 	async function ingest(file: File) {
 		if (!piece) return;
+		if (!isAudioFile(file)) {
+			status = NOT_AUDIO_MESSAGE;
+			return;
+		}
 		enablePlaybackSession();
 		busy = true;
 		status = 'Reading audio…';
@@ -577,7 +581,7 @@
 			onSeek={(time) => engine?.goTo(time)}
 		/>
 	{/if}
-	<input bind:this={fileInput} type="file" accept="audio/*" hidden onchange={onFileInput} />
+	<input bind:this={fileInput} type="file" accept={AUDIO_ACCEPT} hidden onchange={onFileInput} />
 
 	<!-- Attach Audio Popup -->
 	{#if showAttachPopup}
@@ -585,6 +589,9 @@
 			<div class="popup-content" onclick={(e) => e.stopPropagation()}>
 				<h2>Attach Audio File</h2>
 				<p>Attach the audio for this piece. Cues stay saved, and opening the same file brings them back.</p>
+				{#if status === NOT_AUDIO_MESSAGE}
+					<p class="popup-error">{status}</p>
+				{/if}
 				<div class="popup-buttons">
 					<button type="button" class="btn btn-primary" onclick={chooseFile} disabled={busy}>
 						{busy ? 'Reading…' : 'Attach audio'}
@@ -896,6 +903,11 @@
 		margin: 0 0 24px;
 		color: var(--muted);
 		line-height: 1.5;
+	}
+
+	.popup-content .popup-error {
+		margin-top: -12px;
+		color: var(--danger);
 	}
 
 	.popup-buttons {
