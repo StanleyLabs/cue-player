@@ -730,10 +730,10 @@
 
 	.cue-list-section {
 		position: fixed;
-		top: calc(100vh - 280px);
+		top: calc(100dvh - 280px);
 		left: 0;
 		right: 0;
-		bottom: 184px;
+		bottom: calc(184px + var(--safe-bottom));
 		z-index: 5;
 		display: flex;
 		flex-direction: column;
