@@ -118,7 +118,7 @@
 
 </script>
 
-<footer class="transport">
+<footer class="transport" class:speed-open={showSpeedSlider}>
 	<!-- Progress Bar -->
 	<div class="progress-container">
 		<div 
@@ -258,6 +258,12 @@
 		background: rgba(18, 17, 14, 0.95);
 		backdrop-filter: blur(20px);
 		position: relative;
+	}
+
+	/* backdrop-filter creates a stacking context, so the popup's own z-index
+	   cannot escape the bar. Lift the bar above the cue list while open. */
+	.transport.speed-open {
+		z-index: 20;
 	}
 
 	.progress-container {
