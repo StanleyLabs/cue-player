@@ -161,16 +161,19 @@
 		<div class="control-row">
 			<!-- Speed Button -->
 			<div class="speed-section">
-				<button 
-					type="button" 
-					class="control-btn speed-btn" 
-					class:active={!matchesRate(1)}
-					bind:this={speedButton}
-					onclick={() => (showSpeedSlider = !showSpeedSlider)}
-					title="Speed: {formatRate(rate)}"
-				>
-					<Gauge size={18} />
-				</button>
+				<div class="speed-button-container">
+					<button 
+						type="button" 
+						class="control-btn speed-btn" 
+						class:active={!matchesRate(1)}
+						bind:this={speedButton}
+						onclick={() => (showSpeedSlider = !showSpeedSlider)}
+						title="Speed: {formatRate(rate)}"
+					>
+						<Gauge size={18} />
+					</button>
+					<div class="speed-display">{formatRate(rate)}</div>
+				</div>
 				{#if showSpeedSlider}
 					<div class="speed-slider-popup" bind:this={speedPopup}>
 						<input
@@ -351,6 +354,25 @@
 		position: relative;
 		display: flex;
 		justify-content: flex-start;
+	}
+
+	.speed-button-container {
+		position: relative;
+		display: inline-block;
+	}
+
+	.speed-display {
+		position: absolute;
+		top: calc(100% + 4px);
+		left: 50%;
+		transform: translateX(-50%);
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--muted);
+		font-family: var(--mono);
+		font-variant-numeric: tabular-nums;
+		pointer-events: none;
+		white-space: nowrap;
 	}
 
 	.playback-controls {

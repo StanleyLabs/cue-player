@@ -43,12 +43,32 @@
 	let cueListExpanded = $state(false);
 	let showAttachPopup = $state(false);
 
-	// Touch drag state
+	// Cue drawer drag. The drawer is height-driven: collapsed shows only the
+	// header, expanded fills the space between the topbar and the transport.
+	// Keep these two constants in sync with .cue-list-section in the styles.
+	const DRAWER_TOP = 74;
+	const DRAWER_COLLAPSED_HEIGHT = 58;
+	const DRAG_THRESHOLD = 10; // px of movement before a touch counts as a drag
+	const FLING_VELOCITY = 0.35; // px per ms; faster than this snaps in the fling direction
+
+	type DrawerGesture = {
+		/** pending: started on the list, not yet decided between scrolling it and dragging the drawer */
+		mode: 'pending' | 'drawer' | 'scroll';
+		startY: number;
+		startHeight: number;
+		minHeight: number;
+		maxHeight: number;
+		lastY: number;
+		lastTime: number;
+		velocity: number;
+		moved: boolean;
+	};
+
+	let drawerEl = $state<HTMLElement | null>(null);
+	let cueListEl = $state<HTMLElement | null>(null);
 	let isDragging = $state(false);
-	let dragStartY = $state(0);
-	let dragStartExpanded = $state(false);
-	let hasMoved = $state(false);
-	let touchStartTime = $state(0);
+	let drawerHeight = $state<number | null>(null); // inline height while dragging
+	let gesture: DrawerGesture | null = null;
 
 	let loadedHash = '';
 	let attachToken = 0;
@@ -434,67 +454,121 @@
 		}
 	}
 
-	// Touch drag functions
-	function onTouchStart(event: TouchEvent) {
-		// Only handle if touching the cue list section or its header, not individual cue buttons
+	// Drawer drag. Listeners are attached manually because Svelte registers
+	// touchstart/touchmove as passive, which would make preventDefault a no-op.
+	function drawerBounds(el: HTMLElement) {
+		const shell = el.offsetParent as HTMLElement | null;
+		const shellHeight = shell?.clientHeight ?? window.innerHeight;
+		const bottomGap = shellHeight - (el.offsetTop + el.offsetHeight);
+		return {
+			minHeight: DRAWER_COLLAPSED_HEIGHT,
+			maxHeight: Math.max(DRAWER_COLLAPSED_HEIGHT, shellHeight - DRAWER_TOP - bottomGap)
+		};
+	}
+
+	function onDrawerTouchStart(event: TouchEvent) {
+		if (!drawerEl || event.touches.length !== 1) return;
 		const target = event.target as HTMLElement;
-		if (target.closest('button') && !target.closest('.cue-list-header')) {
-			return; // Let cue buttons handle their own events
-		}
+		// Leave text inputs (cue rename) alone.
+		if (target.closest('input')) return;
 
-		isDragging = true;
-		hasMoved = false;
-		dragStartY = event.touches[0].clientY;
-		dragStartExpanded = cueListExpanded;
-		touchStartTime = Date.now();
-		// Don't prevent default yet - let taps work normally
+		const touch = event.touches[0];
+		const startedOnList = !!cueListEl && cueListEl.contains(target);
+		gesture = {
+			mode: startedOnList ? 'pending' : 'drawer',
+			startY: touch.clientY,
+			startHeight: drawerEl.offsetHeight,
+			...drawerBounds(drawerEl),
+			lastY: touch.clientY,
+			lastTime: event.timeStamp,
+			velocity: 0,
+			moved: false
+		};
 	}
 
-	function onTouchMove(event: TouchEvent) {
-		if (!isDragging) return;
-		
-		const currentY = event.touches[0].clientY;
-		const deltaY = Math.abs(dragStartY - currentY);
-		
-		// If moved more than 10px, consider it a drag (not a tap)
-		if (deltaY > 10) {
-			hasMoved = true;
-			// Now prevent scrolling since we're dragging
-			event.preventDefault();
+	function onDrawerTouchMove(event: TouchEvent) {
+		const g = gesture;
+		if (!g || !drawerEl || g.mode === 'scroll') return;
+
+		const y = event.touches[0].clientY;
+		const dy = y - g.startY; // positive = finger moving down
+
+		if (g.mode === 'pending') {
+			// Decide on the first movement. Only let the list scroll natively when it
+			// can actually move in that direction; otherwise the gesture is ours, so
+			// nothing (list or page) scrolls.
+			if (dy === 0) return;
+			const list = cueListEl!;
+			const scrollable = list.scrollHeight > list.clientHeight + 1;
+			const atTop = list.scrollTop <= 0;
+			const atBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 1;
+			const wantsScroll = scrollable && (dy > 0 ? !atTop : !atBottom);
+			g.mode = wantsScroll ? 'scroll' : 'drawer';
+			if (wantsScroll) return;
 		}
-		
-		// Only process drag logic if we've moved significantly
-		if (hasMoved) {
-			const directionDeltaY = dragStartY - currentY; // Positive = drag up, Negative = drag down
-			
-			// Threshold for toggling (50px drag distance)
-			if (Math.abs(directionDeltaY) > 50) {
-				if (directionDeltaY > 0 && !dragStartExpanded) {
-					// Dragging up from collapsed state
-					cueListExpanded = true;
-				} else if (directionDeltaY < 0 && dragStartExpanded) {
-					// Dragging down from expanded state
-					cueListExpanded = false;
-				}
-			}
+
+		event.preventDefault();
+
+		if (!g.moved) {
+			if (Math.abs(dy) < DRAG_THRESHOLD) return;
+			// Re-anchor so the drawer doesn't jump by the threshold when the drag starts.
+			g.moved = true;
+			g.startY = y;
+			g.lastY = y;
+			g.lastTime = event.timeStamp;
+			isDragging = true;
+			drawerHeight = g.startHeight;
+			return;
 		}
+
+		const dt = event.timeStamp - g.lastTime;
+		if (dt > 0) {
+			const instant = (y - g.lastY) / dt;
+			g.velocity = g.velocity * 0.4 + instant * 0.6;
+		}
+		g.lastY = y;
+		g.lastTime = event.timeStamp;
+		drawerHeight = clamp(g.startHeight - dy, g.minHeight, g.maxHeight);
 	}
 
-	function onTouchEnd(event: TouchEvent) {
-		if (!isDragging) return;
-		
-		// If it was a quick tap without movement, let the click event fire
-		const touchDuration = Date.now() - touchStartTime;
-		const wasQuickTap = !hasMoved && touchDuration < 300;
-		
-		if (!wasQuickTap) {
-			// Prevent click events for drags, but allow them for taps
-			event.preventDefault();
-		}
-		
+	function settleDrawer(g: DrawerGesture) {
+		const height = drawerHeight ?? g.startHeight;
+		const flung = Math.abs(g.velocity) > FLING_VELOCITY;
+		// Finger moving up (negative velocity) means expand.
+		cueListExpanded = flung ? g.velocity < 0 : height > (g.minHeight + g.maxHeight) / 2;
 		isDragging = false;
-		hasMoved = false;
+		drawerHeight = null;
 	}
+
+	function onDrawerTouchEnd(event: TouchEvent) {
+		const g = gesture;
+		gesture = null;
+		if (!g || g.mode !== 'drawer' || !g.moved) return;
+		// Swallow the synthetic click so a drag doesn't also toggle the header or play a cue.
+		if (event.cancelable) event.preventDefault();
+		settleDrawer(g);
+	}
+
+	function onDrawerTouchCancel() {
+		const g = gesture;
+		gesture = null;
+		if (g && g.moved) settleDrawer(g);
+	}
+
+	$effect(() => {
+		const el = drawerEl;
+		if (!el) return;
+		el.addEventListener('touchstart', onDrawerTouchStart, { passive: true });
+		el.addEventListener('touchmove', onDrawerTouchMove, { passive: false });
+		el.addEventListener('touchend', onDrawerTouchEnd);
+		el.addEventListener('touchcancel', onDrawerTouchCancel);
+		return () => {
+			el.removeEventListener('touchstart', onDrawerTouchStart);
+			el.removeEventListener('touchmove', onDrawerTouchMove);
+			el.removeEventListener('touchend', onDrawerTouchEnd);
+			el.removeEventListener('touchcancel', onDrawerTouchCancel);
+		};
+	});
 </script>
 
 <svelte:head>
@@ -605,10 +679,9 @@
 			<section 
 				class="cue-list-section" 
 				class:expanded={cueListExpanded} 
-				data-dragging={isDragging}
-				ontouchstart={onTouchStart}
-				ontouchmove={onTouchMove}
-				ontouchend={onTouchEnd}
+				class:dragging={isDragging}
+				bind:this={drawerEl}
+				style:height={drawerHeight === null ? undefined : `${drawerHeight}px`}
 			>
 				<div 
 					class="cue-list-header"
@@ -640,7 +713,7 @@
 						</button>
 					{/if}
 				</div>
-				<div class="cue-list-container" class:expanded={cueListExpanded}>
+				<div class="cue-list-container" bind:this={cueListEl}>
 					<CueList 
 						cues={orderedCues} 
 						editMode={cueListEditMode}
@@ -832,6 +905,8 @@
 		left: 0;
 		right: 0;
 		bottom: calc(188px + var(--safe-bottom)); /* Match transport height exactly */
+		/* Collapsed: header (38px) + top padding (20px). Keep in sync with DRAWER_COLLAPSED_HEIGHT. */
+		height: 58px;
 		z-index: 5;
 		display: flex;
 		flex-direction: column;
@@ -840,25 +915,28 @@
 		border: 1px solid rgba(255, 255, 255, 0.02);
 		border-bottom: none;
 		border-radius: 20px 20px 0 0;
-		transition: all 0.3s ease;
+		transition: height 0.3s ease, border-radius 0.3s ease;
 		overflow: hidden;
 		cursor: pointer;
 		/* Prevent scroll interference during drag */
 		touch-action: none;
 		overscroll-behavior: contain;
-		/* Let collapsed height be determined by content */
-		height: auto;
-		max-height: 58px; /* Just enough for header (38px) + top padding (20px) */
 	}
 
 	.cue-list-section.expanded {
-		top: 74px;
-		bottom: calc(188px + var(--safe-bottom)); /* Keep same bottom position */
-		height: auto; /* Fill between top and bottom */
-		max-height: none; /* Remove collapsed height limit */
+		/* Fill between the topbar (74px, keep in sync with DRAWER_TOP) and the transport. */
+		height: calc(var(--app-height) - 74px - 188px - var(--safe-bottom));
 		border-radius: 0;
 		border-left: none;
 		border-right: none;
+	}
+
+	/* While the finger is down the inline height drives the drawer directly. */
+	.cue-list-section.dragging {
+		transition: none;
+		border-radius: 20px 20px 0 0;
+		border-left: 1px solid rgba(255, 255, 255, 0.02);
+		border-right: 1px solid rgba(255, 255, 255, 0.02);
 	}
 
 	.cue-list-header {
@@ -907,21 +985,18 @@
 
 	.cue-list-container {
 		flex: 1;
+		min-height: 0;
 		overflow: auto;
 		padding: 4px 0;
 		touch-action: pan-y;
 		overscroll-behavior: contain;
 	}
 
-	/* Hide cue list content when collapsed */
-	.cue-list-section:not(.expanded) .cue-list-container {
-		display: none;
-	}
-
-	/* Disable scrolling during drawer drag */
-	.cue-list-section[data-dragging="true"] .cue-list-container {
-		touch-action: none;
-		overflow: hidden;
+	/* Take the list out of the focus order once collapsed. The delay keeps it
+	   visible while the collapse animation is still running. */
+	.cue-list-section:not(.expanded):not(.dragging) .cue-list-container {
+		visibility: hidden;
+		transition: visibility 0s linear 0.3s;
 	}
 
 	.expand-btn {
