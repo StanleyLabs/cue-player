@@ -669,13 +669,15 @@
 							</svg>
 						{/if}
 					</div>
-					<button 
-						type="button" 
-						class="edit-btn"
-						onclick={() => (cueListEditMode = !cueListEditMode)}
-					>
-						{cueListEditMode ? 'Done' : 'Edit'}
-					</button>
+					{#if cueListExpanded}
+						<button 
+							type="button" 
+							class="edit-btn"
+							onclick={() => (cueListEditMode = !cueListEditMode)}
+						>
+							{cueListEditMode ? 'Done' : 'Edit'}
+						</button>
+					{/if}
 				</div>
 				<div class="cue-list-container" class:expanded={cueListExpanded}>
 					<CueList 
