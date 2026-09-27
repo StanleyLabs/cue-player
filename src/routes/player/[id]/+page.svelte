@@ -620,7 +620,7 @@
 	}
 
 	.stage {
-		padding: 12px 24px 0;
+		padding: 0 24px 0;
 		position: relative;
 	}
 
@@ -730,7 +730,7 @@
 
 	.cue-list-section {
 		position: fixed;
-		top: calc(100vh - 260px);
+		top: calc(100vh - 280px);
 		left: 0;
 		right: 0;
 		bottom: 184px;

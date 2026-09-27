@@ -533,7 +533,7 @@
 <style>
 	.waveform-container {
 		position: relative;
-		margin: 20px 0;
+		margin: 20px 0 0 0;
 	}
 
 	.zoom-controls {
