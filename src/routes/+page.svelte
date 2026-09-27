@@ -219,7 +219,7 @@
 			<button type="button" class="btn" onclick={() => backupInput?.click()}>Import backup</button>
 		</div>
 		{#if message}
-			<p class="status" aria-live="polite">{message}</p>
+			<p class="status" class:reading={busy} aria-live="polite">{message}</p>
 		{/if}
 		{#if error}
 			<p class="status error" aria-live="assertive">{error}</p>
@@ -526,9 +526,29 @@
 		font-size: 0.95rem;
 	}
 
+	.status.reading {
+		margin-top: 16px;
+		padding: 0;
+		border: none;
+		border-radius: 0;
+		background: none;
+		color: var(--muted);
+		font-weight: 500;
+		animation: status-pulse 2s ease-in-out infinite;
+	}
+
 	.status.error {
 		border-left-color: var(--danger);
 		background: rgba(255, 141, 122, 0.05);
+	}
+
+	@keyframes status-pulse {
+		0%, 100% {
+			opacity: 0.55;
+		}
+		50% {
+			opacity: 1;
+		}
 	}
 
 	.btn-row {
