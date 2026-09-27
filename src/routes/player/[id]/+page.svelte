@@ -388,10 +388,16 @@
 		isDragging = true;
 		dragStartY = event.touches[0].clientY;
 		dragStartExpanded = cueListExpanded;
+		// Prevent default to avoid unwanted scrolling behavior
+		event.preventDefault();
 	}
 
 	function onTouchMove(event: TouchEvent) {
 		if (!isDragging) return;
+		
+		// Prevent default scrolling behavior
+		event.preventDefault();
+		
 		const currentY = event.touches[0].clientY;
 		const deltaY = dragStartY - currentY; // Positive = drag up, Negative = drag down
 		
