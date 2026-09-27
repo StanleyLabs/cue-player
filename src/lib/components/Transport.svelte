@@ -253,17 +253,20 @@
 
 <style>
 	.transport {
-		flex: none;
+		position: fixed;
+		bottom: 0;
+		left: 0;
+		right: 0;
 		padding: 12px 20px calc(16px + var(--safe-bottom));
 		background: rgba(18, 17, 14, 0.95);
 		backdrop-filter: blur(20px);
-		position: relative;
+		z-index: 10;
 	}
 
 	/* backdrop-filter creates a stacking context, so the popup's own z-index
 	   cannot escape the bar. Lift the bar above the cue list while open. */
 	.transport.speed-open {
-		z-index: 20;
+		z-index: 25;
 	}
 
 	.progress-container {
