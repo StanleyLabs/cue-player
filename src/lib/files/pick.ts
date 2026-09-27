@@ -23,7 +23,15 @@ const AUDIO_EXTENSIONS = [
 	'.3ga'
 ];
 
-export const AUDIO_ACCEPT = ['audio/*', ...AUDIO_EXTENSIONS].join(',');
+// On iOS, including 'audio/*' shows Photo Library and Take Video options
+// Use only specific extensions to go straight to file browser
+function isIOS(): boolean {
+	return /iPad|iPhone|iPod/.test(navigator.userAgent);
+}
+
+export const AUDIO_ACCEPT = isIOS() 
+	? AUDIO_EXTENSIONS.join(',')  // iOS: only specific extensions
+	: ['audio/*', ...AUDIO_EXTENSIONS].join(',');  // Other platforms: include audio/*
 
 const AUDIO_TYPES = [
 	{
