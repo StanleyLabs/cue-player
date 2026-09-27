@@ -217,14 +217,14 @@
 	</header>
 	<main class="scroll">
 		<div class="button-layout">
+			<div class="backup-actions">
+				<button type="button" class="btn btn-small" onclick={downloadBackup}>Export backup</button>
+				<button type="button" class="btn btn-small" onclick={() => backupInput?.click()}>Import backup</button>
+			</div>
 			<div class="main-action">
 				<button type="button" class="btn btn-primary btn-large" onclick={chooseAudio} disabled={busy}>
 					{busy ? 'Reading…' : 'Import audio'}
 				</button>
-			</div>
-			<div class="backup-actions">
-				<button type="button" class="btn btn-small" onclick={downloadBackup}>Export backup</button>
-				<button type="button" class="btn btn-small" onclick={() => backupInput?.click()}>Import backup</button>
 			</div>
 		</div>
 		{#if message}
@@ -604,6 +604,63 @@
 		padding: 10px 20px;
 		min-height: 38px;
 		font-weight: 500;
+	}
+
+	/* Mobile responsive layout */
+	@media (max-width: 640px) {
+		.button-layout {
+			flex-direction: column;
+			align-items: stretch;
+			gap: 16px;
+		}
+
+		.main-action {
+			justify-content: stretch;
+		}
+
+		.backup-actions {
+			justify-content: stretch;
+			gap: 12px;
+		}
+
+		.btn-large,
+		.btn-small {
+			width: 100%;
+			font-weight: 600;
+		}
+
+		.btn-large {
+			font-size: 1.1rem;
+			font-weight: 700;
+			padding: 16px 20px;
+			min-height: 52px;
+		}
+
+		.btn-small {
+			font-size: 0.9rem;
+			padding: 12px 20px;
+			min-height: 44px;
+		}
+	}
+
+	/* Extra small screens */
+	@media (max-width: 480px) {
+		.backup-actions {
+			flex-direction: column;
+			gap: 8px;
+		}
+
+		.btn-large {
+			font-size: 1rem;
+			padding: 14px 16px;
+			min-height: 48px;
+		}
+
+		.btn-small {
+			font-size: 0.85rem;
+			padding: 10px 16px;
+			min-height: 40px;
+		}
 	}
 
 	.main-action .btn:hover:not(:disabled),
