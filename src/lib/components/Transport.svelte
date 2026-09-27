@@ -164,12 +164,12 @@
 				<button 
 					type="button" 
 					class="control-btn speed-btn" 
+					class:active={!matchesRate(1)}
 					bind:this={speedButton}
 					onclick={() => (showSpeedSlider = !showSpeedSlider)}
 					title="Speed: {formatRate(rate)}"
 				>
 					<Gauge size={18} />
-					<span class="speed-text">{formatRate(rate)}</span>
 				</button>
 				{#if showSpeedSlider}
 					<div class="speed-slider-popup" bind:this={speedPopup}>
@@ -378,14 +378,6 @@
 		font-size: 0.9rem;
 		transition: all 0.2s ease;
 		padding: 0 12px;
-		gap: 6px;
-	}
-
-	.speed-text {
-		font-size: 0.85rem;
-		font-weight: 700;
-		min-width: 24px;
-		text-align: center;
 	}
 
 	.control-btn:hover {

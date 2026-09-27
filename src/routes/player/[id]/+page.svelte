@@ -47,6 +47,8 @@
 	let isDragging = $state(false);
 	let dragStartY = $state(0);
 	let dragStartExpanded = $state(false);
+	let hasMoved = $state(false);
+	let touchStartTime = $state(0);
 
 	let loadedHash = '';
 	let attachToken = 0;
@@ -114,34 +116,67 @@
 		syncWide();
 		media.addEventListener('change', syncWide);
 
-		// Fix transport positioning in PWA mode
+		// Fix transport positioning and viewport issues
 		const fixTransportPositioning = () => {
-			const isPWA = window.matchMedia('(display-mode: standalone)').matches;
-			if (!isPWA) return;
-
 			const transport = document.querySelector('.transport');
 			if (!transport) return;
 
-			// Check if transport is positioned too high (more than expected bottom margin)
+			// Force a layout recalculation
+			document.body.offsetHeight;
+
+			// Check if transport has correct positioning
 			const rect = transport.getBoundingClientRect();
 			const windowHeight = window.innerHeight;
-			const expectedBottomGap = 20; // Expected gap from bottom
+			const documentHeight = document.documentElement.clientHeight;
 			
-			if (rect.bottom < windowHeight - expectedBottomGap) {
-				// Transport is too high, adjust it
+			// Use the more reliable height measurement
+			const viewportHeight = Math.min(windowHeight, documentHeight);
+			
+			// Check if transport is positioned correctly at the bottom
+			const transportBottom = rect.bottom;
+			const expectedBottom = viewportHeight;
+			const tolerance = 10; // Allow small differences
+			
+			if (Math.abs(transportBottom - expectedBottom) > tolerance) {
+				// Force correct positioning
+				transport.style.position = 'fixed';
 				transport.style.bottom = '0';
+				transport.style.left = '0';
+				transport.style.right = '0';
 				transport.style.transform = 'translateZ(0)';
+				
+				// Trigger another layout recalculation
+				transport.offsetHeight;
 			}
 		};
 
-		// Run fixes when page loads and on resize
-		fixTransportPositioning();
+		// Force initial viewport size calculation
+		const forceViewportRecalc = () => {
+			// Force CSS custom property recalculation
+			document.documentElement.style.setProperty('--actual-vh', `${window.innerHeight * 0.01}px`);
+			
+			// Force layout recalculation
+			document.body.offsetHeight;
+			
+			// Run transport fix
+			fixTransportPositioning();
+		};
+
+		// Run fixes immediately and multiple times to catch timing issues
+		forceViewportRecalc();
+		requestAnimationFrame(forceViewportRecalc);
+		
+		// Run on various events
 		window.addEventListener('resize', fixTransportPositioning);
 		window.addEventListener('orientationchange', fixTransportPositioning);
-
-		// Also run after a short delay to catch any delayed rendering issues
-		setTimeout(fixTransportPositioning, 100);
-		setTimeout(fixTransportPositioning, 500);
+		window.addEventListener('scroll', fixTransportPositioning, { once: true });
+		
+		// Run with delays to catch various rendering stages
+		setTimeout(forceViewportRecalc, 0);
+		setTimeout(forceViewportRecalc, 50);
+		setTimeout(forceViewportRecalc, 150);
+		setTimeout(forceViewportRecalc, 300);
+		setTimeout(forceViewportRecalc, 600);
 
 		// Lock orientation to portrait
 		const lockOrientation = async () => {
@@ -170,6 +205,7 @@
 			window.removeEventListener('orientationchange', forceRecalc);
 			window.removeEventListener('resize', fixTransportPositioning);
 			window.removeEventListener('orientationchange', fixTransportPositioning);
+			window.removeEventListener('scroll', fixTransportPositioning);
 			engine?.destroy();
 			revokeUrl();
 		};
@@ -439,38 +475,64 @@
 
 	// Touch drag functions
 	function onTouchStart(event: TouchEvent) {
+		// Only handle if touching the cue list section or its header, not individual cue buttons
+		const target = event.target as HTMLElement;
+		if (target.closest('button') && !target.closest('.cue-list-header')) {
+			return; // Let cue buttons handle their own events
+		}
+
 		isDragging = true;
+		hasMoved = false;
 		dragStartY = event.touches[0].clientY;
 		dragStartExpanded = cueListExpanded;
-		// Prevent page scrolling during drag
-		event.preventDefault();
+		touchStartTime = Date.now();
+		// Don't prevent default yet - let taps work normally
 	}
 
 	function onTouchMove(event: TouchEvent) {
 		if (!isDragging) return;
 		
-		// Prevent page scrolling during drag
-		event.preventDefault();
-		
 		const currentY = event.touches[0].clientY;
-		const deltaY = dragStartY - currentY; // Positive = drag up, Negative = drag down
+		const deltaY = Math.abs(dragStartY - currentY);
 		
-		// Threshold for toggling (50px drag distance)
-		if (Math.abs(deltaY) > 50) {
-			if (deltaY > 0 && !dragStartExpanded) {
-				// Dragging up from collapsed state
-				cueListExpanded = true;
-			} else if (deltaY < 0 && dragStartExpanded) {
-				// Dragging down from expanded state
-				cueListExpanded = false;
+		// If moved more than 10px, consider it a drag (not a tap)
+		if (deltaY > 10) {
+			hasMoved = true;
+			// Now prevent scrolling since we're dragging
+			event.preventDefault();
+		}
+		
+		// Only process drag logic if we've moved significantly
+		if (hasMoved) {
+			const directionDeltaY = dragStartY - currentY; // Positive = drag up, Negative = drag down
+			
+			// Threshold for toggling (50px drag distance)
+			if (Math.abs(directionDeltaY) > 50) {
+				if (directionDeltaY > 0 && !dragStartExpanded) {
+					// Dragging up from collapsed state
+					cueListExpanded = true;
+				} else if (directionDeltaY < 0 && dragStartExpanded) {
+					// Dragging down from expanded state
+					cueListExpanded = false;
+				}
 			}
 		}
 	}
 
 	function onTouchEnd(event: TouchEvent) {
+		if (!isDragging) return;
+		
+		// If it was a quick tap without movement, let the click event fire
+		const touchDuration = Date.now() - touchStartTime;
+		const wasQuickTap = !hasMoved && touchDuration < 300;
+		
+		if (!wasQuickTap) {
+			// Prevent click events for drags, but allow them for taps
+			event.preventDefault();
+		}
+		
 		isDragging = false;
-		// Prevent any remaining scroll momentum
-		event.preventDefault();
+		hasMoved = false;
 	}
 </script>
 
@@ -582,6 +644,7 @@
 			<section 
 				class="cue-list-section" 
 				class:expanded={cueListExpanded} 
+				data-dragging={isDragging}
 				ontouchstart={onTouchStart}
 				ontouchmove={onTouchMove}
 				ontouchend={onTouchEnd}
@@ -678,6 +741,14 @@
 		overflow: hidden;
 		touch-action: none;
 		overscroll-behavior: none;
+	}
+
+	/* Fallback height calculation for problematic browsers */
+	@supports not (height: 100dvh) {
+		.player {
+			height: calc(var(--actual-vh, 1vh) * 100);
+			max-height: calc(var(--actual-vh, 1vh) * 100);
+		}
 	}
 
 	.player-body {
@@ -875,6 +946,12 @@
 		padding: 4px 0;
 		touch-action: pan-y;
 		overscroll-behavior: contain;
+	}
+
+	/* Disable scrolling during drawer drag */
+	.cue-list-section[data-dragging="true"] .cue-list-container {
+		touch-action: none;
+		overflow: hidden;
 	}
 
 	.expand-btn {

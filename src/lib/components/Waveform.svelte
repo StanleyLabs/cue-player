@@ -380,6 +380,17 @@
 		}
 	}
 
+	// Cue interaction state
+	let cueDragMoved = $state(false);
+
+	// Handle cue click vs drag
+	function handleCueClick(event: MouseEvent, cue: Cue) {
+		// Only handle click if it wasn't a drag
+		if (!cueDragMoved) {
+			onscrub(cue.time);
+		}
+	}
+
 	// Cue dragging functions
 	function startCueDrag(event: PointerEvent, cue: Cue) {
 		// Only start cue drag on left-click, let right-click pass through for panning
@@ -389,15 +400,21 @@
 		draggedCue = cue.id;
 		dragStartX = event.clientX;
 		dragStartTime = cue.time;
+		cueDragMoved = false;
 		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
 	}
 
 	function moveCueDrag(event: PointerEvent) {
 		if (!draggedCue || !canvas || !onmove) return;
 		
+		// Mark that we've moved (not just a click)
+		const dx = Math.abs(event.clientX - dragStartX);
+		if (dx > 3) {
+			cueDragMoved = true;
+		}
+		
 		const rect = canvas.getBoundingClientRect();
-		const dx = event.clientX - dragStartX;
-		const timeDelta = (dx / rect.width) * visibleDuration;
+		const timeDelta = ((event.clientX - dragStartX) / rect.width) * visibleDuration;
 		const newTime = clamp(dragStartTime + timeDelta, 0, duration);
 		
 		// Update the cue position via parent component
@@ -407,6 +424,12 @@
 	function endCueDrag(event: PointerEvent) {
 		if (draggedCue) {
 			(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+			
+			// Prevent click event if we dragged
+			if (cueDragMoved) {
+				event.preventDefault();
+			}
+			
 			draggedCue = null;
 		}
 	}
@@ -466,7 +489,12 @@
 					style:left="{((cue.time - visibleStart) / visibleDuration) * 100}%"
 					style:--cue-color={cue.color}
 					title="{cue.name} - {cue.time.toFixed(1)}s"
-					onclick={() => onscrub(cue.time)}
+					onclick={(event) => handleCueClick(event, cue)}
+					onpointerdown={(event) => startCueDrag(event, cue)}
+					onpointermove={moveCueDrag}
+					onpointerup={endCueDrag}
+					onpointercancel={endCueDrag}
+					oncontextmenu={(event) => event.preventDefault()}
 				>
 					{cue.name}
 				</button>
@@ -497,21 +525,14 @@
 			ontouchend={onTouchEnd}
 		></canvas>
 
-		<!-- Cue Drag Handles -->
-		<div class="cue-handles">
+		<!-- Cue Lines (visual only, no interaction) -->
+		<div class="cue-lines">
 			{#each cues as cue (cue.id)}
 				{#if cue.time >= visibleStart && cue.time <= visibleEnd}
 					<div
-						class="cue-handle"
-						class:dragging={draggedCue === cue.id}
+						class="cue-line"
 						style:left="{((cue.time - visibleStart) / visibleDuration) * 100}%"
 						style:--cue-color={cue.color}
-						title="Drag to move {cue.name}"
-						onpointerdown={(event) => startCueDrag(event, cue)}
-						onpointermove={moveCueDrag}
-						onpointerup={endCueDrag}
-						onpointercancel={endCueDrag}
-						oncontextmenu={(event) => event.preventDefault()}
 					></div>
 				{/if}
 			{/each}
@@ -684,12 +705,13 @@
 		text-overflow: ellipsis;
 		border: 1px solid rgba(0, 0, 0, 0.1);
 		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-		touch-action: manipulation;
+		touch-action: none;
 		min-width: 44px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		top: 4px;
+		cursor: grab;
 	}
 
 	.cue-btn:hover {
@@ -701,6 +723,8 @@
 	.cue-btn.dragging {
 		transition: none;
 		z-index: 2;
+		cursor: grabbing;
+		transform: translateX(-50%) translateY(-1px) scale(1.05);
 	}
 
 	.pan-indicator {
@@ -741,7 +765,7 @@
 		transition: none;
 	}
 
-	.cue-handles {
+	.cue-lines {
 		position: absolute;
 		top: 0;
 		left: 0;
@@ -750,43 +774,15 @@
 		pointer-events: none;
 	}
 
-	.cue-handle {
+	.cue-line {
 		position: absolute;
-		top: 0;
-		bottom: 0;
-		width: 8px;
-		transform: translateX(-50%);
-		cursor: ew-resize;
-		pointer-events: all;
-		background: transparent;
-		transition: background 0.2s ease;
-	}
-
-	.cue-handle:hover {
-		background: rgba(255, 255, 255, 0.1);
-	}
-
-	.cue-handle.dragging {
-		background: rgba(226, 255, 87, 0.2);
-		cursor: grabbing;
-	}
-
-	.cue-handle::before {
-		content: '';
-		position: absolute;
-		left: 50%;
 		top: 0;
 		bottom: 0;
 		width: 2px;
 		transform: translateX(-50%);
 		background: var(--cue-color);
-		opacity: 0;
-		transition: opacity 0.2s ease;
-	}
-
-	.cue-handle:hover::before,
-	.cue-handle.dragging::before {
-		opacity: 0.8;
+		opacity: 0.6;
+		pointer-events: none;
 	}
 
 	.pan-thumb:hover {
