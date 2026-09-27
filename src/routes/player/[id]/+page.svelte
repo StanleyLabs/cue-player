@@ -13,7 +13,7 @@
 	import { computePeaks, type Peaks } from '$lib/audio/peaks';
 	import { nextCueColor, nextCueName, smartCueColor } from '$lib/cues/names';
 	import { phraseBounds } from '$lib/cues/phrase';
-	import { AUDIO_ACCEPT, isAudioFile, NOT_AUDIO_MESSAGE, pickAudioFile } from '$lib/files/pick';
+	import { MEDIA_ACCEPT, isMediaFile, NOT_MEDIA_MESSAGE, pickMediaFile } from '$lib/files/pick';
 	import { clamp, formatTime, roundTime } from '$lib/format';
 	import { recallFile, rememberFile } from '$lib/storage/session';
 	import { hashFile } from '$lib/storage/hash';
@@ -136,56 +136,28 @@
 		syncWide();
 		media.addEventListener('change', syncWide);
 
-		// Enhanced orientation locking
-		const lockOrientation = async () => {
-			try {
-				// Method 1: Modern Screen Orientation API
-				if (screen.orientation && screen.orientation.lock) {
-					await screen.orientation.lock('portrait');
-					console.log('Orientation locked via Screen Orientation API');
-					return;
-				}
-			} catch (error) {
-				console.log('Screen Orientation API failed:', error);
-			}
-
-			try {
-				// Method 2: Legacy screen.lockOrientation (Android)
-				const legacyLock = screen.lockOrientation || 
-					screen.mozLockOrientation || 
-					screen.msLockOrientation;
-				if (legacyLock) {
-					legacyLock('portrait');
-					console.log('Orientation locked via legacy API');
-					return;
-				}
-			} catch (error) {
-				console.log('Legacy orientation API failed:', error);
-			}
-
-			// Method 3: CSS and meta tags (already added)
-			console.log('Using CSS and meta tag orientation hints');
+		// Keep the app in portrait where the platform allows it. This works in
+		// installed PWAs on Android/Chromium. iOS Safari does not implement
+		// screen.orientation.lock() and ignores the manifest orientation, so the
+		// landscape overlay in app.css is the fallback there.
+		const lockOrientation = () => {
+			const orientation = screen.orientation as ScreenOrientation & {
+				lock?: (orientation: OrientationLockType) => Promise<void>;
+			};
+			if (typeof orientation?.lock !== 'function') return;
+			orientation.lock('portrait').catch(() => {
+				// Not permitted (browser tab, unsupported platform); nothing to do.
+			});
 		};
 
-		// Try to lock orientation immediately and on various events
 		lockOrientation();
-		
-		// Also try after delays in case APIs aren't ready immediately
-		setTimeout(lockOrientation, 100);
-		setTimeout(lockOrientation, 1000);
-		
-		// Re-lock when orientation changes
-		const handleOrientationChange = () => {
-			setTimeout(lockOrientation, 100);
-		};
-		
-		window.addEventListener('orientationchange', handleOrientationChange);
+		// Re-assert after a rotation in case the lock was dropped (e.g. leaving fullscreen).
+		const handleOrientationChange = () => lockOrientation();
 		screen.orientation?.addEventListener('change', handleOrientationChange);
 
 		return () => {
 			unsubscribe?.();
 			media.removeEventListener('change', syncWide);
-			window.removeEventListener('orientationchange', handleOrientationChange);
 			screen.orientation?.removeEventListener('change', handleOrientationChange);
 			engine?.destroy();
 			revokeUrl();
@@ -237,7 +209,7 @@
 
 	async function chooseFile() {
 		enablePlaybackSession();
-		const result = await pickAudioFile();
+		const result = await pickMediaFile();
 		if (result.kind === 'file') await ingest(result.file);
 		else if (result.kind === 'fallback') fileInput?.click();
 	}
@@ -251,8 +223,8 @@
 
 	async function ingest(file: File) {
 		if (!piece) return;
-		if (!isAudioFile(file)) {
-			status = NOT_AUDIO_MESSAGE;
+		if (!isMediaFile(file)) {
+			status = NOT_MEDIA_MESSAGE;
 			return;
 		}
 		enablePlaybackSession();
@@ -746,7 +718,7 @@
 			onScrubEnd={() => engine?.endScrub()}
 		/>
 	{/if}
-	<input bind:this={fileInput} type="file" accept={AUDIO_ACCEPT} hidden onchange={onFileInput} />
+	<input bind:this={fileInput} type="file" accept={MEDIA_ACCEPT} hidden onchange={onFileInput} />
 
 	<!-- Attach Audio Popup -->
 	{#if showAttachPopup}
@@ -754,7 +726,7 @@
 			<div class="popup-content" onclick={(e) => e.stopPropagation()}>
 				<h2>Attach Audio File</h2>
 				<p>Attach the audio for this piece. Cues stay saved, and opening the same file brings them back.</p>
-				{#if status === NOT_AUDIO_MESSAGE}
+				{#if status === NOT_MEDIA_MESSAGE}
 					<p class="popup-error">{status}</p>
 				{/if}
 				<div class="popup-buttons">

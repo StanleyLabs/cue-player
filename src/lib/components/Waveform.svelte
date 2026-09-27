@@ -211,11 +211,11 @@
 	function onPointerUp(event: PointerEvent) {
 		if (canvas?.hasPointerCapture(event.pointerId)) {
 			canvas.releasePointerCapture(event.pointerId);
-			if (!isDragging) {
-				onscrubend();
-			}
-			isDragging = false;
 		}
+		// Always close out the scrub, even if capture was already lost (e.g. the
+		// browser cancelled the pointer), so the engine never stays in scrub mode.
+		if (!isDragging) onscrubend();
+		isDragging = false;
 	}
 
 	function zoomIn() {
@@ -390,7 +390,10 @@
 	function handleCueClick(event: MouseEvent, cue: Cue) {
 		// Only handle click if it wasn't a drag
 		if (!cueDragMoved) {
+			// A tap is a one-shot seek. Without onscrubend the engine stays in
+			// "scrubbing" mode and suspends loop / stop-at-cue indefinitely.
 			onscrub(cue.time);
+			onscrubend();
 		}
 	}
 

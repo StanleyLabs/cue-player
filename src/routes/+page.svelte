@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { afterNavigate, goto } from '$app/navigation';
 	import { enablePlaybackSession } from '$lib/audio/engine';
-	import { AUDIO_ACCEPT, isAudioFile, NOT_AUDIO_MESSAGE, pickAudioFile } from '$lib/files/pick';
+	import { MEDIA_ACCEPT, isMediaFile, NOT_MEDIA_MESSAGE, pickMediaFile } from '$lib/files/pick';
 	import { formatTime } from '$lib/format';
 	import { recallFile } from '$lib/storage/session';
 	import { deletePiece, downloadBackup, importBackup, listPieces, mutatePiece, openAudioFile } from '$lib/storage/library';
@@ -116,7 +116,7 @@
 
 	async function chooseAudio() {
 		enablePlaybackSession();
-		const result = await pickAudioFile();
+		const result = await pickMediaFile();
 		if (result.kind === 'file') await ingest(result.file);
 		else if (result.kind === 'fallback') audioInput?.click();
 	}
@@ -129,8 +129,8 @@
 	}
 
 	async function ingest(file: File) {
-		if (!isAudioFile(file)) {
-			error = NOT_AUDIO_MESSAGE;
+		if (!isMediaFile(file)) {
+			error = NOT_MEDIA_MESSAGE;
 			message = '';
 			return;
 		}
@@ -303,7 +303,7 @@
 			</ul>
 		{/if}
 	</main>
-	<input bind:this={audioInput} type="file" accept={AUDIO_ACCEPT} hidden onchange={onAudioInput} />
+	<input bind:this={audioInput} type="file" accept={MEDIA_ACCEPT} hidden onchange={onAudioInput} />
 	<input bind:this={backupInput} type="file" accept="application/json,.json" hidden onchange={onBackupInput} />
 </div>
 

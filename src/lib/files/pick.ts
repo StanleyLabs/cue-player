@@ -14,7 +14,6 @@ const AUDIO_EXTENSIONS = [
 	'.oga',
 	'.opus',
 	'.flac',
-	'.webm',
 	'.weba',
 	'.caf',
 	'.mka',
@@ -23,42 +22,48 @@ const AUDIO_EXTENSIONS = [
 	'.3ga'
 ];
 
-// On iOS, including 'audio/*' shows Photo Library and Take Video options
-// Use only specific extensions to go straight to file browser
-function isIOS(): boolean {
-	return /iPad|iPhone|iPod/.test(navigator.userAgent);
-}
+// Video containers are accepted too: <audio> and decodeAudioData both read the
+// audio track and ignore the picture, so a rehearsal recording works as-is.
+// On iOS this is also what makes the "Photo Library" / "Take Video" options in
+// the file sheet meaningful (they can only ever hand us video).
+const VIDEO_EXTENSIONS = ['.mp4', '.m4v', '.mov', '.webm', '.mkv', '.3gp', '.3g2'];
 
-export const AUDIO_ACCEPT = isIOS() 
-	? AUDIO_EXTENSIONS.join(',')  // iOS: only specific extensions
-	: ['audio/*', ...AUDIO_EXTENSIONS].join(',');  // Other platforms: include audio/*
+export const MEDIA_ACCEPT = ['audio/*', 'video/*', ...AUDIO_EXTENSIONS, ...VIDEO_EXTENSIONS].join(',');
 
-const AUDIO_TYPES = [
+const MEDIA_TYPES: { description: string; accept: Record<string, string[]> }[] = [
 	{
 		description: 'Audio',
-		accept: {
-			'audio/*': AUDIO_EXTENSIONS
-		}
+		accept: { 'audio/*': AUDIO_EXTENSIONS }
+	},
+	{
+		description: 'Video (audio track is used)',
+		accept: { 'video/*': VIDEO_EXTENSIONS }
 	}
 ];
 
-export function isAudioFile(file: File): boolean {
-	if (file.type.startsWith('audio/')) return true;
+function extensionOf(file: File): string {
 	const dot = file.name.lastIndexOf('.');
-	return dot !== -1 && AUDIO_EXTENSIONS.includes(file.name.slice(dot).toLowerCase());
+	return dot === -1 ? '' : file.name.slice(dot).toLowerCase();
 }
 
-export const NOT_AUDIO_MESSAGE = 'That file is not an audio file. Choose an MP3, WAV, AIFF, M4A, FLAC, OGG, or similar.';
+export function isMediaFile(file: File): boolean {
+	if (file.type.startsWith('audio/') || file.type.startsWith('video/')) return true;
+	const extension = extensionOf(file);
+	return AUDIO_EXTENSIONS.includes(extension) || VIDEO_EXTENSIONS.includes(extension);
+}
+
+export const NOT_MEDIA_MESSAGE =
+	'That file is not an audio or video file. Choose an MP3, WAV, AIFF, M4A, FLAC, MP4, MOV, or similar.';
 
 export type PickResult = { kind: 'file'; file: File } | { kind: 'cancel' } | { kind: 'fallback' };
 
-export async function pickAudioFile(): Promise<PickResult> {
+export async function pickMediaFile(): Promise<PickResult> {
 	if (typeof window.showOpenFilePicker !== 'function') return { kind: 'fallback' };
 	try {
 		const [handle] = await window.showOpenFilePicker({
 			multiple: false,
 			excludeAcceptAllOption: true,
-			types: AUDIO_TYPES
+			types: MEDIA_TYPES
 		});
 		return { kind: 'file', file: await handle.getFile() };
 	} catch (error) {

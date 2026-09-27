@@ -11,7 +11,8 @@ export interface EngineSnapshot {
 type Listener = (snapshot: EngineSnapshot) => void;
 
 export function enablePlaybackSession(): void {
-	if (navigator.audioSession) navigator.audioSession.type = 'playback';
+	const session = navigator.audioSession;
+	if (session && session.type !== 'playback') session.type = 'playback';
 }
 
 export class AudioEngine {
@@ -19,7 +20,11 @@ export class AudioEngine {
 	private listeners = new Set<Listener>();
 	private raf = 0;
 	private wakeLock: WakeLockSentinel | null = null;
+	/** Target of a seek the element has not confirmed yet; shown instead of audio.currentTime. */
 	private displayedTime: number | null = null;
+	/** True between assigning audio.currentTime and the matching `seeked` event. */
+	private seekPending = false;
+	/** Where the current phrase was entered; transport rules measure the phrase from here. */
 	private armedFrom = 0;
 	private scrubbing = false;
 	private loopEnabled = false;
@@ -28,9 +33,14 @@ export class AudioEngine {
 	private endBehavior: EndBehavior = 'playThrough';
 	private cueTimes: number[] = [];
 	private rate = 1;
+	/** See keepSessionWarm(). */
+	private warmContext: AudioContext | null = null;
 	private onVisibility = () => {
-		if (document.visibilityState === 'visible' && !this.audio.paused) {
-			void this.acquireWakeLock();
+		if (document.visibilityState === 'visible') {
+			if (!this.audio.paused) void this.acquireWakeLock();
+			if (this.warmContext) void this.warmContext.resume().catch(() => {});
+		} else if (this.warmContext) {
+			void this.warmContext.suspend().catch(() => {});
 		}
 	};
 
@@ -42,6 +52,7 @@ export class AudioEngine {
 		this.audio.addEventListener('pause', this.onPause);
 		this.audio.addEventListener('ended', this.onEnded);
 		this.audio.addEventListener('seeked', this.onSeeked);
+		this.audio.addEventListener('timeupdate', this.onTimeUpdate);
 		this.audio.addEventListener('loadedmetadata', this.onMetadata);
 		document.addEventListener('visibilitychange', this.onVisibility);
 	}
@@ -60,8 +71,9 @@ export class AudioEngine {
 		this.emit();
 	}
 
-	async play(): Promise<void> {
+	play(): Promise<void> {
 		enablePlaybackSession();
+		this.keepSessionWarm();
 		if (
 			this.endBehavior === 'stopAtCue' &&
 			this.stoppedAt != null &&
@@ -73,10 +85,37 @@ export class AudioEngine {
 			this.seek(start);
 		}
 		this.armedFrom = this.time();
-		await this.audio.play();
+		// audio.play() flips `paused` synchronously but its promise only settles
+		// once the pipeline is actually producing sound. Emit now so the UI
+		// reacts on the tap itself rather than waiting for the media stack.
+		const started = this.audio.play();
 		this.startRaf();
 		void this.acquireWakeLock();
 		this.emit();
+		return started.catch((error: unknown) => {
+			// Autoplay refused or the element failed to start: roll the UI back.
+			this.stopRaf();
+			this.emit();
+			throw error;
+		});
+	}
+
+	/**
+	 * Keep the platform audio session active between plays. On iOS WebKit a
+	 * paused media element lets the session go idle, and the next play() has to
+	 * re-activate it, which adds a variable delay before sound starts. A running
+	 * AudioContext (even with nothing connected) keeps the output route open so
+	 * resuming is immediate. Must first be called from a user gesture.
+	 */
+	private keepSessionWarm(): void {
+		try {
+			if (!this.warmContext) this.warmContext = new AudioContext();
+			if (this.warmContext.state !== 'running') {
+				void this.warmContext.resume().catch(() => {});
+			}
+		} catch {
+			this.warmContext = null;
+		}
 	}
 
 	pause(): void {
@@ -100,9 +139,7 @@ export class AudioEngine {
 			this.phraseStart = null;
 		}
 		this.scrubbing = Boolean(options?.scrubbing);
-		this.displayedTime = next;
-		this.armedFrom = next;
-		if (Number.isFinite(this.audio.duration)) this.audio.currentTime = next;
+		this.setPosition(next);
 		this.emit();
 	}
 
@@ -118,6 +155,8 @@ export class AudioEngine {
 
 	setLoop(enabled: boolean): void {
 		this.loopEnabled = enabled;
+		// Loop the phrase the playhead is in now, not the one playback started in.
+		if (enabled) this.armedFrom = this.time();
 	}
 
 	setEndBehavior(behavior: EndBehavior): void {
@@ -125,7 +164,12 @@ export class AudioEngine {
 	}
 
 	setCueTimes(times: number[]): void {
-		this.cueTimes = [...times].filter((time) => Number.isFinite(time)).sort((a, b) => a - b);
+		const next = [...times].filter((time) => Number.isFinite(time)).sort((a, b) => a - b);
+		const changed =
+			next.length !== this.cueTimes.length || next.some((time, i) => time !== this.cueTimes[i]);
+		this.cueTimes = next;
+		// The phrase structure changed under the playhead; measure from where it is now.
+		if (changed) this.armedFrom = this.time();
 	}
 
 	destroy(): void {
@@ -134,10 +178,13 @@ export class AudioEngine {
 		this.audio.removeEventListener('pause', this.onPause);
 		this.audio.removeEventListener('ended', this.onEnded);
 		this.audio.removeEventListener('seeked', this.onSeeked);
+		this.audio.removeEventListener('timeupdate', this.onTimeUpdate);
 		this.audio.removeEventListener('loadedmetadata', this.onMetadata);
 		document.removeEventListener('visibilitychange', this.onVisibility);
 		this.audio.removeAttribute('src');
 		this.audio.load();
+		void this.warmContext?.close().catch(() => {});
+		this.warmContext = null;
 		this.listeners.clear();
 	}
 
@@ -153,10 +200,25 @@ export class AudioEngine {
 	};
 
 	private onEnded = () => {
-		if (this.endBehavior === 'stopAtCue' && !this.loopEnabled) {
+		if (this.loopEnabled) {
+			// The last phrase runs to the end of the file; if a late tick let the
+			// element reach it, restart the phrase instead of stopping.
+			const bounds = phraseBounds(this.armedFrom, this.cueTimes, this.duration());
+			this.setPosition(bounds.start);
+			void this.play().catch(() => this.onPause());
+			return;
+		}
+		if (this.endBehavior === 'stopAtCue') {
 			this.latchPhrase(this.armedFrom, this.duration());
 		}
 		this.onPause();
+	};
+
+	/** Fires ~4×/s from the element itself, so transport rules still run when rAF is throttled. */
+	private onTimeUpdate = () => {
+		if (this.audio.paused) return;
+		this.applyTransportRules();
+		this.emit();
 	};
 
 	private latchPhrase(origin: number, stoppedAt: number): void {
@@ -177,23 +239,35 @@ export class AudioEngine {
 	}
 
 	private onSeeked = () => {
-		if (this.displayedTime != null && Math.abs(this.audio.currentTime - this.displayedTime) < 0.08) {
-			this.displayedTime = null;
-		}
+		// The seek has landed; whatever the element reports is now the truth.
+		this.seekPending = false;
+		this.displayedTime = null;
 		this.emit();
 	};
+
+	/** Move the element and arm the transport rules from the new position. */
+	private setPosition(time: number): void {
+		this.displayedTime = time;
+		this.armedFrom = time;
+		if (Number.isFinite(this.audio.duration)) {
+			this.audio.currentTime = time;
+			this.seekPending = true;
+		}
+	}
 
 	private duration(): number {
 		return Number.isFinite(this.audio.duration) ? this.audio.duration : 0;
 	}
 
 	private time(): number {
-		if (this.displayedTime == null) return this.audio.currentTime || 0;
-		if (Math.abs((this.audio.currentTime || 0) - this.displayedTime) < 0.08) {
-			this.displayedTime = null;
-			return this.audio.currentTime || 0;
-		}
-		return this.displayedTime;
+		const actual = this.audio.currentTime || 0;
+		if (this.displayedTime == null) return actual;
+		// Hold the requested position only while the element is still catching up
+		// (seek in flight, or metadata not loaded yet). Never hold it indefinitely.
+		const waiting = this.seekPending || !Number.isFinite(this.audio.duration);
+		if (waiting && Math.abs(actual - this.displayedTime) >= 0.08) return this.displayedTime;
+		this.displayedTime = null;
+		return actual;
 	}
 
 	private snapshot(): EngineSnapshot {
@@ -231,11 +305,17 @@ export class AudioEngine {
 		const lookahead = 0.035 * rate;
 
 		if (this.loopEnabled) {
-			const bounds = phraseBounds(t, this.cueTimes, this.duration() || t);
+			// Measure from the phrase we entered, not from `t`: if a tick arrives late
+			// and `t` is already past the cue, phraseBounds(t) would describe the
+			// next phrase and the loop would quietly drift forward.
+			const bounds = phraseBounds(this.armedFrom, this.cueTimes, this.duration() || t);
+			if (t < bounds.start - 0.05 || t > bounds.end + 1) {
+				// Playback moved somewhere we didn't send it (e.g. while suspended). Re-arm here.
+				this.armedFrom = t;
+				return;
+			}
 			if (bounds.end > bounds.start + 0.05 && t >= bounds.end - lookahead) {
-				this.audio.currentTime = bounds.start;
-				this.displayedTime = bounds.start;
-				this.armedFrom = bounds.start;
+				this.setPosition(bounds.start);
 			}
 			return;
 		}
@@ -245,9 +325,7 @@ export class AudioEngine {
 		const endsAtCue = this.cueTimes.some((cue) => Math.abs(cue - bounds.end) < 0.02);
 		if (!endsAtCue || bounds.end <= bounds.start + 0.05 || t < bounds.end - lookahead) return;
 		this.latchPhrase(this.armedFrom, bounds.end);
-		this.displayedTime = bounds.end;
-		this.armedFrom = bounds.end;
-		this.audio.currentTime = bounds.end;
+		this.setPosition(bounds.end);
 		this.audio.pause();
 	}
 

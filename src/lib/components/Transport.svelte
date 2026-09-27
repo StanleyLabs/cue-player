@@ -55,13 +55,10 @@
 	let speedButton: HTMLElement;
 	let speedPopup = $state<HTMLElement>();
 
-	// Seek bar state
-	let seekBarElement: HTMLElement;
-	let seekHandleElement: HTMLElement;
+	// Seek bar state. The track element gives us the geometry; the surrounding
+	// container is the (larger) interactive surface.
+	let seekTrack = $state<HTMLElement | null>(null);
 	let isDragging = $state(false);
-	let dragStartX = $state(0);
-	let dragStartTime = $state(0);
-	let dragTime = $state(0); // Current time during drag
 
 	// Close popup when clicking outside
 	$effect(() => {
@@ -81,78 +78,77 @@
 		return () => document.removeEventListener('click', handleClickOutside);
 	});
 
-	// Seek bar functions
-	function getTimeFromPosition(clientX: number): number {
-		if (!seekBarElement || duration <= 0) return 0;
-		const rect = seekBarElement.getBoundingClientRect();
+	// Seek bar. Same model as scrubbing the waveform: capture the pointer on
+	// press, scrub on every move, end the scrub on release. The engine updates
+	// currentTime synchronously on each scrub, so the fill/handle follow it.
+	function timeFromPointer(clientX: number): number {
+		if (!seekTrack || duration <= 0) return 0;
+		const rect = seekTrack.getBoundingClientRect();
 		const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
 		return ratio * duration;
 	}
 
-	function onSeekBarDown(event: PointerEvent) {
-		if (!canPlay || duration <= 0) return;
-		
-		dragStartX = event.clientX;
-		dragStartTime = currentTime;
+	function onSeekDown(event: PointerEvent) {
+		if (!canPlay || duration <= 0 || event.button !== 0) return;
+		const surface = event.currentTarget as HTMLElement;
+		surface.setPointerCapture(event.pointerId);
 		isDragging = true;
-		
-		// If clicking directly on the bar (not handle), seek immediately
-		if (event.target === seekBarElement) {
-			const newTime = getTimeFromPosition(event.clientX);
-			dragTime = newTime;
-			onScrub(newTime);
-			dragStartTime = newTime;
-		} else {
-			dragTime = currentTime;
-		}
-		
-		document.addEventListener('pointermove', onSeekBarMove);
-		document.addEventListener('pointerup', onSeekBarUp);
+		onScrub(timeFromPointer(event.clientX));
 	}
 
-	function onSeekBarMove(event: PointerEvent) {
-		if (!isDragging || duration <= 0) return;
-		const newTime = getTimeFromPosition(event.clientX);
-		dragTime = newTime;
-		onScrub(newTime);
+	function onSeekMove(event: PointerEvent) {
+		const surface = event.currentTarget as HTMLElement;
+		if (!surface.hasPointerCapture(event.pointerId)) return;
+		onScrub(timeFromPointer(event.clientX));
 	}
 
-	function onSeekBarUp() {
+	function onSeekUp(event: PointerEvent) {
+		const surface = event.currentTarget as HTMLElement;
+		if (surface.hasPointerCapture(event.pointerId)) surface.releasePointerCapture(event.pointerId);
+		if (!isDragging) return;
+		// Always close out the scrub so the engine never stays in scrub mode.
 		isDragging = false;
 		onScrubEnd();
-		document.removeEventListener('pointermove', onSeekBarMove);
-		document.removeEventListener('pointerup', onSeekBarUp);
 	}
 
+	function onSeekKey(event: KeyboardEvent) {
+		if (!canPlay || duration <= 0) return;
+		if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+		event.preventDefault();
+		const step = event.shiftKey ? 1 : 0.1;
+		const next = currentTime + (event.key === 'ArrowLeft' ? -step : step);
+		onScrub(Math.max(0, Math.min(duration, next)));
+		onScrubEnd();
+	}
 </script>
 
 <footer class="transport" class:speed-open={showSpeedSlider}>
 	<!-- Progress Bar -->
-	<div class="progress-container">
-		<div 
-			class="progress-bar"
-			bind:this={seekBarElement}
-			onpointerdown={onSeekBarDown}
-			role="slider"
-			aria-label="Seek position"
-			aria-valuemin={0}
-			aria-valuemax={duration}
-			aria-valuenow={isDragging ? dragTime : currentTime}
-			tabindex="0"
-		>
-			<div 
-				class="progress-fill" 
-				style="width: {duration > 0 ? ((isDragging ? dragTime : currentTime) / duration) * 100 : 0}%"
+	<div
+		class="progress-container"
+		class:disabled={!canPlay || duration <= 0}
+		role="slider"
+		aria-label="Seek position"
+		aria-valuemin={0}
+		aria-valuemax={duration}
+		aria-valuenow={currentTime}
+		aria-disabled={!canPlay || duration <= 0}
+		tabindex="0"
+		onpointerdown={onSeekDown}
+		onpointermove={onSeekMove}
+		onpointerup={onSeekUp}
+		onpointercancel={onSeekUp}
+		onkeydown={onSeekKey}
+	>
+		<div class="progress-bar" bind:this={seekTrack}>
+			<div
+				class="progress-fill"
+				style:width="{duration > 0 ? (currentTime / duration) * 100 : 0}%"
 			></div>
-			<div 
+			<div
 				class="progress-handle"
-				bind:this={seekHandleElement}
 				class:dragging={isDragging}
-				style="left: {duration > 0 ? ((isDragging ? dragTime : currentTime) / duration) * 100 : 0}%"
-				onpointerdown={onSeekBarDown}
-				role="button"
-				aria-label="Seek handle"
-				tabindex="0"
+				style:left="{duration > 0 ? (currentTime / duration) * 100 : 0}%"
 			></div>
 		</div>
 	</div>
@@ -286,8 +282,28 @@
 	}
 
 	.progress-container {
-		padding: 12px 0 8px;
+		/* The whole container is the seek surface. Negative margins keep the
+		   layout footprint at 24px while the touch target grows to ~42px. */
+		margin: -10px 0 -8px;
+		padding: 22px 0 16px;
 		cursor: pointer;
+		touch-action: none;
+		-webkit-user-select: none;
+		user-select: none;
+	}
+
+	.progress-container.disabled {
+		cursor: default;
+	}
+
+	.progress-container:focus-visible {
+		outline: none;
+	}
+
+	.progress-container:focus-visible .progress-bar {
+		outline: 2px solid var(--accent);
+		outline-offset: 6px;
+		border-radius: 2px;
 	}
 
 	.progress-bar {
@@ -295,8 +311,7 @@
 		height: 4px;
 		background: rgba(255, 255, 255, 0.2);
 		border-radius: 2px;
-		cursor: pointer;
-		touch-action: none;
+		pointer-events: none;
 	}
 
 	.progress-fill {
@@ -318,17 +333,22 @@
 		border: 2px solid var(--accent);
 		border-radius: 50%;
 		transform: translate(-50%, -50%);
-		cursor: grab;
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+		pointer-events: none;
+		transition: transform 0.15s ease, box-shadow 0.15s ease;
 	}
 
-	.progress-handle:hover {
+	.progress-container:hover:not(.disabled) .progress-handle {
 		transform: translate(-50%, -50%) scale(1.1);
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 	}
 
-	.progress-handle.dragging {
+	.progress-container:not(.disabled):active {
 		cursor: grabbing;
+	}
+
+	.progress-handle.dragging,
+	.progress-container:hover:not(.disabled) .progress-handle.dragging {
 		transform: translate(-50%, -50%) scale(1.2);
 	}
 
@@ -403,9 +423,16 @@
 		padding: 0 12px;
 	}
 
-	.control-btn:hover {
-		background: rgba(255, 255, 255, 0.12);
-		transform: translateY(-1px);
+	@media (hover: hover) {
+		.control-btn:hover {
+			background: rgba(255, 255, 255, 0.12);
+			transform: translateY(-1px);
+		}
+	}
+
+	.control-btn:active {
+		transform: scale(0.94);
+		transition: none;
 	}
 
 	/* Ensure speed button keeps pointer cursor even when popup is open */
@@ -432,9 +459,16 @@
 		transition: all 0.2s ease;
 	}
 
-	.step-btn:hover:not(:disabled) {
-		background: rgba(255, 255, 255, 0.12);
-		transform: translateY(-1px);
+	@media (hover: hover) {
+		.step-btn:hover:not(:disabled) {
+			background: rgba(255, 255, 255, 0.12);
+			transform: translateY(-1px);
+		}
+	}
+
+	.step-btn:active:not(:disabled) {
+		transform: scale(0.92);
+		transition: none;
 	}
 
 	.step-btn:disabled {
@@ -452,18 +486,23 @@
 		align-items: center;
 		justify-content: center;
 		margin: 0 8px;
-		transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+		/* Animate the release only; the press itself must be instant (see :active). */
+		transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 		box-shadow: 0 4px 16px var(--accent-rgba-30);
 		border: 2px solid var(--accent-rgba-40);
 	}
 
-	.play-btn:hover:not(:disabled) {
-		transform: translateY(-2px);
-		box-shadow: 0 6px 20px var(--accent-rgba-40);
+	@media (hover: hover) {
+		.play-btn:hover:not(:disabled) {
+			transform: translateY(-2px);
+			box-shadow: 0 6px 20px var(--accent-rgba-40);
+		}
 	}
 
-	.play-btn:active {
-		transform: translateY(-1px);
+	.play-btn:active:not(:disabled) {
+		transform: scale(0.92);
+		box-shadow: 0 2px 8px var(--accent-rgba-30);
+		transition: none;
 	}
 
 	.play-btn:disabled {
