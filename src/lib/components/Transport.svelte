@@ -642,4 +642,13 @@
 		fill: currentColor !important;
 		stroke: none !important;
 	}
+
+	/* PWA performance optimization */
+	@media (display-mode: standalone) {
+		.transport {
+			/* Force hardware acceleration to prevent rendering issues */
+			transform: translateZ(0);
+			will-change: transform;
+		}
+	}
 </style>

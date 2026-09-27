@@ -32,6 +32,8 @@
 
 * {
 	box-sizing: border-box;
+	/* Prevent zoom gestures by default */
+	touch-action: manipulation;
 }
 
 html,
@@ -39,12 +41,21 @@ body {
 	margin: 0;
 	min-height: 100%;
 	background: var(--bg);
+	/* Prevent zoom */
+	touch-action: manipulation;
+	-ms-touch-action: manipulation;
+	-webkit-user-select: none;
+	user-select: none;
 }
 
 body {
 	min-height: 100dvh;
 	overscroll-behavior: none;
 	-webkit-tap-highlight-color: transparent;
+	/* Additional zoom prevention */
+	-webkit-text-size-adjust: 100%;
+	-ms-text-size-adjust: 100%;
+	text-size-adjust: 100%;
 }
 
 button,
@@ -88,7 +99,7 @@ a {
 	-ms-user-select: none;
 }
 
-/* Allow text selection only in text inputs */
+/* Allow text selection and proper touch behavior in text inputs */
 .app-screen input[type="text"],
 .app-screen input[type="email"],
 .app-screen input[type="password"],
@@ -102,6 +113,8 @@ a {
 	-webkit-user-select: text;
 	-moz-user-select: text;
 	-ms-user-select: text;
+	/* Allow normal touch behavior for text inputs */
+	touch-action: auto;
 }
 
 .topbar {
@@ -224,4 +237,34 @@ a {
 	flex: 1;
 	overflow: auto;
 	padding: 8px 20px calc(24px + var(--safe-bottom));
+}
+
+/* Prevent zoom on interactive elements while preserving gestures */
+canvas, 
+.waveform-container,
+.transport,
+.progress-bar {
+	touch-action: manipulation;
+}
+
+/* Prevent double-tap zoom specifically */
+@media (pointer: coarse) {
+	* {
+		-webkit-touch-callout: none;
+		-webkit-user-select: none;
+	}
+	
+	/* Re-enable selection for text inputs */
+	input[type="text"],
+	input[type="email"], 
+	input[type="password"],
+	input[type="search"],
+	input[type="url"],
+	textarea,
+	.title-input,
+	.text-input,
+	.cue-name-input {
+		-webkit-user-select: text;
+		user-select: text;
+	}
 }

@@ -792,4 +792,17 @@
 	.pan-thumb:hover {
 		background: var(--accent-light);
 	}
+
+	/* Responsive waveform height */
+	@media (max-width: 768px) {
+		.wave {
+			height: 150px;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.wave {
+			height: 120px;
+		}
+	}
 </style>

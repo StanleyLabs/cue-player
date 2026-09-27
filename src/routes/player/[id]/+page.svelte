@@ -114,6 +114,35 @@
 		syncWide();
 		media.addEventListener('change', syncWide);
 
+		// Fix transport positioning in PWA mode
+		const fixTransportPositioning = () => {
+			const isPWA = window.matchMedia('(display-mode: standalone)').matches;
+			if (!isPWA) return;
+
+			const transport = document.querySelector('.transport');
+			if (!transport) return;
+
+			// Check if transport is positioned too high (more than expected bottom margin)
+			const rect = transport.getBoundingClientRect();
+			const windowHeight = window.innerHeight;
+			const expectedBottomGap = 20; // Expected gap from bottom
+			
+			if (rect.bottom < windowHeight - expectedBottomGap) {
+				// Transport is too high, adjust it
+				transport.style.bottom = '0';
+				transport.style.transform = 'translateZ(0)';
+			}
+		};
+
+		// Run fixes when page loads and on resize
+		fixTransportPositioning();
+		window.addEventListener('resize', fixTransportPositioning);
+		window.addEventListener('orientationchange', fixTransportPositioning);
+
+		// Also run after a short delay to catch any delayed rendering issues
+		setTimeout(fixTransportPositioning, 100);
+		setTimeout(fixTransportPositioning, 500);
+
 		// Lock orientation to portrait
 		const lockOrientation = async () => {
 			try {
@@ -139,6 +168,8 @@
 			media.removeEventListener('change', syncWide);
 			window.removeEventListener('resize', forceRecalc);
 			window.removeEventListener('orientationchange', forceRecalc);
+			window.removeEventListener('resize', fixTransportPositioning);
+			window.removeEventListener('orientationchange', fixTransportPositioning);
 			engine?.destroy();
 			revokeUrl();
 		};
@@ -411,10 +442,15 @@
 		isDragging = true;
 		dragStartY = event.touches[0].clientY;
 		dragStartExpanded = cueListExpanded;
+		// Prevent page scrolling during drag
+		event.preventDefault();
 	}
 
 	function onTouchMove(event: TouchEvent) {
 		if (!isDragging) return;
+		
+		// Prevent page scrolling during drag
+		event.preventDefault();
 		
 		const currentY = event.touches[0].clientY;
 		const deltaY = dragStartY - currentY; // Positive = drag up, Negative = drag down
@@ -431,8 +467,10 @@
 		}
 	}
 
-	function onTouchEnd() {
+	function onTouchEnd(event: TouchEvent) {
 		isDragging = false;
+		// Prevent any remaining scroll momentum
+		event.preventDefault();
 	}
 </script>
 
@@ -775,6 +813,9 @@
 		transition: all 0.3s ease;
 		overflow: hidden;
 		cursor: pointer;
+		/* Prevent scroll interference during drag */
+		touch-action: none;
+		overscroll-behavior: contain;
 	}
 
 	.cue-list-section.expanded {
