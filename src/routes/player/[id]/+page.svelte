@@ -736,7 +736,7 @@
 
 	.cue-list-section {
 		position: fixed;
-		top: calc(100dvh - 280px);
+		top: calc(100dvh - 280px - var(--safe-bottom));
 		left: 0;
 		right: 0;
 		bottom: calc(184px + var(--safe-bottom));
