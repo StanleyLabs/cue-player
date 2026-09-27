@@ -716,6 +716,7 @@
 				<div class="cue-list-container" bind:this={cueListEl}>
 					<CueList 
 						cues={orderedCues} 
+						{currentTime}
 						editMode={cueListEditMode}
 						onplay={playCue} 
 						onrename={renameCue} 

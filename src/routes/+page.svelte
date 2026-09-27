@@ -216,12 +216,16 @@
 		{/if}
 	</header>
 	<main class="scroll">
-		<div class="btn-row">
-			<button type="button" class="btn btn-primary" onclick={chooseAudio} disabled={busy}>
-				{busy ? 'Reading…' : 'Import audio'}
-			</button>
-			<button type="button" class="btn" onclick={downloadBackup}>Export backup</button>
-			<button type="button" class="btn" onclick={() => backupInput?.click()}>Import backup</button>
+		<div class="button-layout">
+			<div class="main-action">
+				<button type="button" class="btn btn-primary btn-large" onclick={chooseAudio} disabled={busy}>
+					{busy ? 'Reading…' : 'Import audio'}
+				</button>
+			</div>
+			<div class="backup-actions">
+				<button type="button" class="btn btn-small" onclick={downloadBackup}>Export backup</button>
+				<button type="button" class="btn btn-small" onclick={() => backupInput?.click()}>Import backup</button>
+			</div>
 		</div>
 		{#if message}
 			<p class="status" class:reading={busy} aria-live="polite">{message}</p>
@@ -566,6 +570,44 @@
 	}
 
 	.btn-row .btn:hover:not(:disabled) {
+		transform: translateY(-1px);
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+	}
+
+	.button-layout {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 20px;
+		margin-bottom: 20px;
+	}
+
+	.main-action {
+		display: flex;
+	}
+
+	.backup-actions {
+		display: flex;
+		gap: 16px;
+	}
+
+	.btn-large {
+		font-size: 1.2rem;
+		padding: 16px 32px;
+		min-height: 52px;
+		font-weight: 700;
+		border-radius: 16px;
+	}
+
+	.btn-small {
+		font-size: 0.9rem;
+		padding: 10px 20px;
+		min-height: 38px;
+		font-weight: 500;
+	}
+
+	.main-action .btn:hover:not(:disabled),
+	.backup-actions .btn:hover:not(:disabled) {
 		transform: translateY(-1px);
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 	}

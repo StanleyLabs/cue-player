@@ -5,6 +5,7 @@
 
 	let {
 		cues,
+		currentTime = 0,
 		editMode = false,
 		onplay,
 		onrename,
@@ -12,6 +13,7 @@
 		oncolorchange
 	}: {
 		cues: Cue[];
+		currentTime?: number;
 		editMode?: boolean;
 		onplay: (cue: Cue) => void;
 		onrename: (id: string, name: string) => void;
@@ -23,6 +25,11 @@
 	let colorPickerOpen = $state<string | null>(null);
 
 	const ordered = $derived([...cues].sort((a, b) => a.time - b.time));
+	
+	// Find the active cue: the most recent cue that has been reached (within a small tolerance)
+	const activeCue = $derived(
+		[...ordered].reverse().find((cue) => cue.time <= currentTime + 0.05) ?? null
+	);
 
 	// Close color picker when clicking outside
 	$effect(() => {
@@ -48,6 +55,7 @@
 			<li 
 				class="cue-item"
 				class:editing={editMode && editingCueId === cue.id}
+				class:active={activeCue?.id === cue.id}
 				style:--cue-color={cue.color}
 			>
 				{#if editMode}
@@ -144,7 +152,7 @@
 			color-mix(in srgb, var(--cue-color) 18%, rgba(255, 255, 255, 0.03)) 0%,
 			color-mix(in srgb, var(--cue-color) 12%, rgba(255, 255, 255, 0.02)) 100%
 		);
-		border: 1px solid color-mix(in srgb, var(--cue-color) 20%, rgba(255, 255, 255, 0.1));
+		border: 2px solid color-mix(in srgb, var(--cue-color) 20%, rgba(255, 255, 255, 0.1));
 		transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 		overflow: hidden;
 		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -165,6 +173,20 @@
 	.cue-item:active {
 		transform: translateY(0);
 		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+	}
+
+	.cue-item.active {
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--cue-color) 35%, rgba(255, 255, 255, 0.08)) 0%,
+			color-mix(in srgb, var(--cue-color) 28%, rgba(255, 255, 255, 0.06)) 100%
+		);
+		border-color: rgba(255, 255, 255, 0.8);
+	}
+
+	.cue-item.active .cue-name {
+		color: rgba(255, 255, 255, 0.95);
+		font-weight: 700;
 	}
 
 	/* View Mode - Full row button */
