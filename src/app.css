@@ -1,0 +1,207 @@
+:root {
+	color-scheme: dark;
+	--bg: #12110e;
+	--bg-elev: #1c1b16;
+	--bg-elev-2: #28261f;
+	--line: rgba(255, 248, 230, 0.1);
+	--text: #f6f1e6;
+	--muted: #b3aa9a;
+	--accent: #e2ff57;
+	--accent-light: #f0ff7a;
+	--accent-ink: #1c2204;
+	--danger: #ff8d7a;
+	--accent-rgba-01: rgba(226, 255, 87, 0.01);
+	--accent-rgba-02: rgba(226, 255, 87, 0.02);
+	--accent-rgba-08: rgba(226, 255, 87, 0.08);
+	--accent-rgba-15: rgba(226, 255, 87, 0.15);
+	--accent-rgba-16: rgba(226, 255, 87, 0.16);
+	--accent-rgba-20: rgba(226, 255, 87, 0.2);
+	--accent-rgba-25: rgba(226, 255, 87, 0.25);
+	--accent-rgba-30: rgba(226, 255, 87, 0.3);
+	--accent-rgba-40: rgba(226, 255, 87, 0.4);
+	--loop: rgba(226, 255, 87, 0.16);
+	--shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+	--safe-top: env(safe-area-inset-top, 0px);
+	--safe-bottom: env(safe-area-inset-bottom, 0px);
+	--font: ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+	--mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', monospace;
+	font-family: var(--font);
+	background: var(--bg);
+	color: var(--text);
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	min-height: 100%;
+	background: var(--bg);
+}
+
+body {
+	min-height: 100dvh;
+	overscroll-behavior: none;
+	-webkit-tap-highlight-color: transparent;
+}
+
+button,
+input {
+	font: inherit;
+	color: inherit;
+}
+
+button {
+	cursor: pointer;
+	border: 0;
+	background: none;
+}
+
+button:disabled {
+	cursor: default;
+	opacity: 0.4;
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
+
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.app-screen {
+	min-height: 100dvh;
+	display: flex;
+	flex-direction: column;
+	padding-top: var(--safe-top);
+	background:
+		radial-gradient(1200px 400px at 50% -10%, var(--accent-rgba-08), transparent 55%),
+		var(--bg);
+}
+
+.topbar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 64px;
+	padding: 12px 20px 8px;
+}
+
+.topbar h1,
+.wordmark {
+	margin: 0;
+	font-size: 1.35rem;
+	font-weight: 650;
+	letter-spacing: -0.03em;
+}
+
+.eyebrow {
+	margin: 0 0 2px;
+	color: var(--muted);
+	font-size: 0.75rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.back {
+	display: grid;
+	place-items: center;
+	width: 44px;
+	height: 44px;
+	border-radius: 999px;
+	background: var(--bg-elev);
+	flex: none;
+}
+
+.title-input,
+.text-input {
+	width: 100%;
+	border: 0;
+	border-bottom: 2px solid var(--line);
+	background: transparent;
+	padding: 12px 0;
+	font-size: 1.15rem;
+	font-weight: 650;
+	letter-spacing: -0.03em;
+	transition: all 0.2s ease;
+}
+
+.title-input:focus,
+.text-input:focus {
+	border-bottom-color: var(--accent);
+	box-shadow: 0 2px 0 0 var(--accent-rgba-20);
+}
+
+.btn {
+	min-height: 44px;
+	padding: 0 18px;
+	border-radius: 999px;
+	background: linear-gradient(135deg, var(--bg-elev-2) 0%, var(--bg-elev) 100%);
+	border: 1px solid rgba(255, 255, 255, 0.05);
+	color: var(--text);
+	font-weight: 500;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	position: relative;
+	overflow: hidden;
+}
+
+.btn:hover:not(:disabled) {
+	transform: translateY(-1px);
+	border-color: var(--accent-rgba-20);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn:active {
+	transform: translateY(0);
+}
+
+.btn-primary {
+	background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+	border-color: var(--accent);
+	color: var(--accent-ink);
+	font-weight: 700;
+	box-shadow: 0 2px 8px var(--accent-rgba-25);
+}
+
+.btn-primary:hover:not(:disabled) {
+	box-shadow: 0 4px 16px var(--accent-rgba-40);
+	border-color: var(--accent-light);
+}
+
+.btn-danger {
+	color: var(--danger);
+	background: rgba(255, 141, 122, 0.05);
+	border-color: rgba(255, 141, 122, 0.2);
+}
+
+.btn-danger:hover:not(:disabled) {
+	background: rgba(255, 141, 122, 0.1);
+	border-color: var(--danger);
+}
+
+.btn-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.status {
+	margin: 0;
+	color: var(--muted);
+	font-size: 0.92rem;
+}
+
+.status.error {
+	color: var(--danger);
+}
+
+.scroll {
+	flex: 1;
+	overflow: auto;
+	padding: 8px 20px calc(24px + var(--safe-bottom));
+}
