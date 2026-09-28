@@ -607,20 +607,6 @@
 					onmove={moveCue}
 				/>
 
-				<div class="status-container">
-					{#if $loading.isLoading || peaksStatus === 'loading' || status}
-						<div class="status-text">
-							{#if $loading.isLoading}
-								{$loading.message}
-							{:else if peaksStatus === 'loading'}
-								Drawing waveform…
-							{:else if status}
-								{status}
-							{/if}
-						</div>
-					{/if}
-				</div>
-				
 				<div class="clock-row">
 					<div class="time-display">
 						<p class="clock">
@@ -646,6 +632,17 @@
 					>
 						Add cue
 					</button>
+					{#if $loading.isLoading || peaksStatus === 'loading' || status}
+						<p class="status-text">
+							{#if $loading.isLoading}
+								{$loading.message}
+							{:else if peaksStatus === 'loading'}
+								Drawing waveform…
+							{:else if status}
+								{status}
+							{/if}
+						</p>
+					{/if}
 				</div>
 				{#if peaksStatus === 'error'}
 					<p class="status">Waveform unavailable. Playback still works.</p>
@@ -789,6 +786,7 @@
 
 
 	.clock-row {
+		position: relative;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -847,22 +845,19 @@
 		margin-left: 12px;
 	}
 
-	.status-container {
-		position: relative;
-		height: 0;
-	}
-
 	.status-text {
+		position: absolute;
+		top: calc(100% + 20px);
+		left: 0;
+		right: 0;
+		margin: 0;
 		font-size: 0.75rem;
 		color: var(--muted);
 		font-weight: 500;
 		animation: pulse 2s ease-in-out infinite;
 		text-align: center;
-		position: absolute;
-		top: -16px;
-		left: 0;
-		right: 0;
 		z-index: 2;
+		pointer-events: none;
 	}
 
 	@keyframes pulse {
