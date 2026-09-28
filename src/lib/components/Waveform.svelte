@@ -88,15 +88,15 @@
 		duration > 0 && visibleDuration > 0 ? (currentTime - visibleStart) / visibleDuration : null
 	);
 
-	// Follow playhead when enabled - always center it
+	// Follow playhead when enabled - always center it. Pause only while two
+	// fingers are actually down; a leftover pinch flag must not freeze follow.
 	$effect(() => {
-		if (!followPlayhead || zoomLevel <= 1 || isDragging || panBarDragging || pinching) return;
-		
-		// Always try to center the playhead in the view
-		const targetPanOffset = currentTime - visibleDuration / 2;
-		
-		// Clamp to valid bounds (can't pan beyond audio boundaries)
-		panOffset = clamp(targetPanOffset, 0, duration - visibleDuration);
+		const time = currentTime;
+		const visible = visibleDuration;
+		if (!followPlayhead || zoomLevel <= 1 || isDragging || panBarDragging || activeTouches > 1) return;
+
+		const targetPanOffset = time - visible / 2;
+		panOffset = clamp(targetPanOffset, 0, Math.max(0, duration - visible));
 	});
 
 	function draw() {
@@ -270,6 +270,7 @@
 	function onPointerUp(event: PointerEvent) {
 		if (event.pointerType === 'touch') {
 			touchPointerIds.delete(event.pointerId);
+			activeTouches = touchPointerIds.size;
 			if (canvas?.hasPointerCapture(event.pointerId)) {
 				canvas.releasePointerCapture(event.pointerId);
 			}
@@ -445,9 +446,10 @@
 
 	function onTouchEnd(event: TouchEvent) {
 		activeTouches = event.touches.length;
-		if (event.touches.length === 0) {
-			touchStartDistance = 0;
-		}
+		if (event.touches.length > 0) return;
+		touchStartDistance = 0;
+		pinching = false;
+		touchPointerIds.clear();
 	}
 
 	// Cue interaction state
@@ -631,6 +633,7 @@
 			ontouchstart={onTouchStart}
 			ontouchmove={onTouchMove}
 			ontouchend={onTouchEnd}
+			ontouchcancel={onTouchEnd}
 		></canvas>
 
 		<!-- Cue Lines (visual only, no interaction) -->
