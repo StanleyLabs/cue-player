@@ -84,6 +84,9 @@
 	const visibleDuration = $derived(duration / zoomLevel);
 	const visibleStart = $derived(clamp(panOffset, 0, duration - visibleDuration));
 	const visibleEnd = $derived(visibleStart + visibleDuration);
+	const playheadRatio = $derived(
+		duration > 0 && visibleDuration > 0 ? (currentTime - visibleStart) / visibleDuration : null
+	);
 
 	// Follow playhead when enabled - always center it
 	$effect(() => {
@@ -165,11 +168,12 @@
 			ctx.fillRect(x - 1, 0, 2, height);
 		}
 
-		// Draw playhead (adjusted for zoom/pan)
+		// Draw playhead (adjusted for zoom/pan). The triangle sits above the
+		// canvas so the rounded waveform edge does not clip it.
 		if (duration > 0 && visibleDuration > 0) {
 			if (currentTime >= visibleStart && currentTime <= visibleEnd) {
 				const x = ((currentTime - visibleStart) / visibleDuration) * width;
-				ctx.fillStyle = '#e2ff57';
+				ctx.fillStyle = '#fff';
 				ctx.fillRect(x - 1.5, 0, 3, height);
 			}
 		}
@@ -603,7 +607,11 @@
 	</div>
 
 	<!-- Waveform -->
-	<div class="wave">
+	<div class="wave-frame">
+		{#if playheadRatio != null && playheadRatio >= 0 && playheadRatio <= 1}
+			<div class="playhead-marker" style:left="{playheadRatio * 100}%"></div>
+		{/if}
+		<div class="wave">
 		<canvas
 			bind:this={canvas}
 			aria-label="Waveform. Click to scrub, scroll to zoom, right-click drag to pan."
@@ -637,6 +645,7 @@
 				{/if}
 			{/each}
 		</div>
+	</div>
 	</div>
 
 	<!-- Pan Indicator -->
@@ -763,6 +772,22 @@
 		min-width: 65px;
 	}
 
+	.wave-frame {
+		position: relative;
+	}
+
+	.playhead-marker {
+		position: absolute;
+		top: 0;
+		z-index: 2;
+		width: 12px;
+		height: 8px;
+		transform: translate(-50%, -100%);
+		background: #fff;
+		clip-path: polygon(0 0, 100% 0, 50% 100%);
+		pointer-events: none;
+	}
+
 	.wave {
 		position: relative;
 		height: 200px;
@@ -799,7 +824,7 @@
 		font-size: 0.8rem;
 		font-weight: 600;
 		white-space: nowrap;
-		transition: all 0.2s ease;
+		transition: transform 0.2s ease, box-shadow 0.2s ease;
 		max-width: 120px;
 		overflow: hidden;
 		text-overflow: ellipsis;
