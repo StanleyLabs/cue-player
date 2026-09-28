@@ -22,8 +22,14 @@ export class AudioEngine {
 	private wakeLock: WakeLockSentinel | null = null;
 	/** Target of a seek the element has not confirmed yet; shown instead of audio.currentTime. */
 	private displayedTime: number | null = null;
+	/** Latest position requested. May be ahead of the element while a seek is in flight. */
+	private seekTarget: number | null = null;
 	/** True between assigning audio.currentTime and the matching `seeked` event. */
 	private seekPending = false;
+	private seekAttempts = 0;
+	private seekTimer = 0;
+	/** Playback was interrupted by a scrub and should resume when the seek lands. */
+	private resumeAfterScrub = false;
 	/** Where the current phrase was entered; transport rules measure the phrase from here. */
 	private armedFrom = 0;
 	private scrubbing = false;
@@ -119,6 +125,7 @@ export class AudioEngine {
 	}
 
 	pause(): void {
+		this.resumeAfterScrub = false;
 		this.audio.pause();
 		this.stopRaf();
 		void this.releaseWakeLock();
@@ -138,14 +145,24 @@ export class AudioEngine {
 			this.stoppedAt = null;
 			this.phraseStart = null;
 		}
-		this.scrubbing = Boolean(options?.scrubbing);
+		const scrubbing = Boolean(options?.scrubbing);
+		// A burst of currentTime writes wedges the media element: it stays
+		// "playing" but produces no sound. Pause for the gesture and let only
+		// one seek run at a time.
+		if (scrubbing && !this.scrubbing && !this.audio.paused && !this.audio.ended) {
+			this.resumeAfterScrub = true;
+			this.audio.pause();
+		}
+		this.scrubbing = scrubbing;
 		this.setPosition(next);
 		this.emit();
 	}
 
 	endScrub(): void {
 		this.scrubbing = false;
+		this.applySeek();
 		this.armedFrom = this.time();
+		this.resumeIfNeeded();
 	}
 
 	setRate(rate: number): void {
@@ -183,6 +200,8 @@ export class AudioEngine {
 		document.removeEventListener('visibilitychange', this.onVisibility);
 		this.audio.removeAttribute('src');
 		this.audio.load();
+		window.clearTimeout(this.seekTimer);
+		this.seekTimer = 0;
 		void this.warmContext?.close().catch(() => {});
 		this.warmContext = null;
 		this.listeners.clear();
@@ -239,20 +258,95 @@ export class AudioEngine {
 	}
 
 	private onSeeked = () => {
-		// The seek has landed; whatever the element reports is now the truth.
-		this.seekPending = false;
-		this.displayedTime = null;
+		if (this.seekTarget != null && Math.abs(this.audio.currentTime - this.seekTarget) >= 0.08) {
+			this.seekPending = false;
+			// seeked can fire inside the currentTime assignment. Apply the newer
+			// target on a later turn so this cannot recurse.
+			queueMicrotask(() => {
+				this.applySeek();
+				this.emit();
+			});
+			return;
+		}
+		this.finishSeek();
 		this.emit();
+		this.resumeIfNeeded();
 	};
 
-	/** Move the element and arm the transport rules from the new position. */
+	/** Move the displayed playhead immediately, and seek the element when it is free. */
 	private setPosition(time: number): void {
 		this.displayedTime = time;
 		this.armedFrom = time;
-		if (Number.isFinite(this.audio.duration)) {
-			this.audio.currentTime = time;
-			this.seekPending = true;
+		if (!Number.isFinite(this.audio.duration)) return;
+		this.seekTarget = time;
+		this.applySeek();
+	}
+
+	private applySeek(): void {
+		if (this.seekTarget == null || !Number.isFinite(this.audio.duration)) return;
+		if (Math.abs(this.audio.currentTime - this.seekTarget) < 0.05 && !this.audio.seeking) {
+			this.finishSeek();
+			return;
 		}
+		// One seek at a time. The latest target is kept and applied when this one lands.
+		if (this.audio.seeking || this.seekPending) {
+			this.armSeekWatchdog();
+			return;
+		}
+		const target = this.seekTarget;
+		this.seekPending = true;
+		this.audio.currentTime = target;
+		if (this.seekPending) this.armSeekWatchdog();
+	}
+
+	private finishSeek(): void {
+		window.clearTimeout(this.seekTimer);
+		this.seekTimer = 0;
+		this.seekAttempts = 0;
+		this.seekPending = false;
+		this.displayedTime = null;
+		this.seekTarget = null;
+	}
+
+	private armSeekWatchdog(): void {
+		window.clearTimeout(this.seekTimer);
+		this.seekTimer = window.setTimeout(() => this.recoverSeek(), 500);
+	}
+
+	/** A seek that never settles leaves the element silent while play() still toggles. */
+	private recoverSeek(): void {
+		this.seekTimer = 0;
+		if (this.seekTarget == null) return;
+		if (!this.audio.seeking && Math.abs(this.audio.currentTime - this.seekTarget) < 0.08) {
+			this.finishSeek();
+			this.emit();
+			this.resumeIfNeeded();
+			return;
+		}
+		this.seekAttempts += 1;
+		this.seekPending = false;
+		if (this.seekAttempts > 2) {
+			const target = this.seekTarget;
+			this.audio.pause();
+			this.seekAttempts = 0;
+			try {
+				this.audio.currentTime = target;
+			} catch {
+				// The element can reject a seek while wedged; the next attempt retries.
+			}
+			this.seekPending = true;
+			this.armSeekWatchdog();
+			this.emit();
+			return;
+		}
+		this.applySeek();
+		if (this.seekPending) this.armSeekWatchdog();
+	}
+
+	private resumeIfNeeded(): void {
+		if (!this.resumeAfterScrub || this.scrubbing || this.seekPending) return;
+		this.resumeAfterScrub = false;
+		void this.play();
 	}
 
 	private duration(): number {
@@ -274,7 +368,7 @@ export class AudioEngine {
 		return {
 			currentTime: this.time(),
 			duration: this.duration(),
-			playing: !this.audio.paused && !this.audio.ended
+			playing: this.resumeAfterScrub || (!this.audio.paused && !this.audio.ended)
 		};
 	}
 
