@@ -48,7 +48,7 @@
 	// header, expanded fills the space between the topbar and the transport.
 	// Keep these two constants in sync with .cue-list-section in the styles.
 	const DRAWER_TOP = 74;
-	const DRAWER_COLLAPSED_HEIGHT = 58;
+	const DRAWER_COLLAPSED_HEIGHT = 64;
 	const DRAG_THRESHOLD = 10; // px of movement before a touch counts as a drag
 	const FLING_VELOCITY = 0.35; // px per ms; faster than this snaps in the fling direction
 
@@ -653,7 +653,7 @@
 				class:expanded={cueListExpanded} 
 				class:dragging={isDragging}
 				bind:this={drawerEl}
-				style:height={drawerHeight === null ? undefined : `${drawerHeight}px`}
+				style={`--drawer-collapsed-height: ${DRAWER_COLLAPSED_HEIGHT}px; ${drawerHeight !== null ? `height: ${drawerHeight}px;` : ''}`}
 			>
 				<div 
 					class="cue-list-header"
@@ -883,9 +883,9 @@
 		position: absolute;
 		left: 0;
 		right: 0;
-		bottom: calc(188px + var(--safe-bottom)); /* Match transport height exactly */
+		bottom: calc(195px + var(--safe-bottom)); /* Match transport height exactly */
 		/* Collapsed: header (38px) + top padding (20px). Keep in sync with DRAWER_COLLAPSED_HEIGHT. */
-		height: 58px;
+		height: var(--drawer-collapsed-height);
 		z-index: 5;
 		display: flex;
 		flex-direction: column;
@@ -1088,5 +1088,17 @@
 		display: flex;
 		gap: 12px;
 		justify-content: center;
+	}
+
+	@media (max-width: 768px) {
+		.cue-list-section {
+			bottom: calc(188px + var(--safe-bottom)); /* Match transport height exactly */
+		}
+	}
+
+	@media (max-width: 480px) {
+		.cue-list-section {
+			bottom: calc(180px + var(--safe-bottom)); /* Match transport height exactly */
+		}
 	}
 </style>
