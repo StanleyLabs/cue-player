@@ -297,7 +297,7 @@
 
 		{#if pieces.length === 0}
 			<section class="empty">
-				<p>Import a song, then mark the spots you need to hear again.</p>
+				<p>Import an audio or video file, create cue points.</p>
 			</section>
 		{:else}
 			<ul class="pieces">
