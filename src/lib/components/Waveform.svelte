@@ -53,6 +53,10 @@
 	let scrubOriginY = 0;
 	let scrubbedDuringGesture = false;
 	let timeBeforeScrub = 0;
+	// Set when a second finger touches, so a pointerdown in that same gesture
+	// stays a pinch. Cleared when every finger lifts.
+	let multiTouchAt = 0;
+	let singleTouchAt = 0;
 	
 	// Cue dragging state
 	let draggedCue = $state<string | null>(null);
@@ -212,11 +216,21 @@
 		if (duration <= 0 || !canvas) return;
 
 		if (event.pointerType === 'touch') {
-			touchPointerIds.add(event.pointerId);
-			if (touchPointerIds.size >= 2 || pinching) {
+			const now = performance.now();
+			const concurrentPinch = now - multiTouchAt < 80 && multiTouchAt >= singleTouchAt;
+			const singleFinger = now - singleTouchAt < 80 && singleTouchAt > multiTouchAt;
+			// A one-finger touch is always a scrub, even if an earlier pinch left
+			// stale pointer tracking behind. A second finger in the same gesture is not.
+			if (!singleFinger && (!event.isPrimary || concurrentPinch)) {
+				touchPointerIds.add(event.pointerId);
+				activeTouches = Math.max(activeTouches, touchPointerIds.size);
 				beginPinch();
 				return;
 			}
+			pinching = false;
+			touchPointerIds.clear();
+			touchPointerIds.add(event.pointerId);
+			activeTouches = 1;
 			timeBeforeScrub = currentTime;
 			scrubbedDuringGesture = false;
 			scrubOriginX = event.clientX;
@@ -257,7 +271,7 @@
 		}
 
 		if (event.pointerType === 'touch') {
-			if (event.pointerId !== scrubPointerId || touchPointerIds.size !== 1) return;
+			if (pinching || event.pointerId !== scrubPointerId) return;
 			const dx = event.clientX - scrubOriginX;
 			const dy = event.clientY - scrubOriginY;
 			if (!scrubbedDuringGesture && dx * dx + dy * dy < TOUCH_SCRUB_SLOP * TOUCH_SCRUB_SLOP) return;
@@ -270,13 +284,14 @@
 	function onPointerUp(event: PointerEvent) {
 		if (event.pointerType === 'touch') {
 			touchPointerIds.delete(event.pointerId);
-			activeTouches = touchPointerIds.size;
 			if (canvas?.hasPointerCapture(event.pointerId)) {
 				canvas.releasePointerCapture(event.pointerId);
 			}
-			if (pinching) {
-				if (event.pointerId === scrubPointerId) scrubPointerId = null;
-				if (touchPointerIds.size === 0) pinching = false;
+			const endedPinch = pinching;
+			if (event.isPrimary || touchPointerIds.size === 0) pinching = false;
+			if (endedPinch) {
+				scrubPointerId = null;
+				scrubbedDuringGesture = false;
 				return;
 			}
 			if (event.pointerId === scrubPointerId) {
@@ -411,10 +426,16 @@
 
 	function onTouchStart(event: TouchEvent) {
 		activeTouches = event.touches.length;
-		
+
+		if (event.touches.length === 1) {
+			singleTouchAt = performance.now();
+			return;
+		}
+
 		if (event.touches.length === 2) {
 			// Two finger gesture - pinch zoom and pan. Never seeks.
 			event.preventDefault();
+			multiTouchAt = performance.now();
 			beginPinch();
 			touchStartDistance = getTouchDistance(event.touches);
 			touchStartZoom = zoomLevel;
@@ -449,6 +470,8 @@
 		if (event.touches.length > 0) return;
 		touchStartDistance = 0;
 		pinching = false;
+		multiTouchAt = 0;
+		singleTouchAt = 0;
 		touchPointerIds.clear();
 	}
 
