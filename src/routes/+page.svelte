@@ -121,6 +121,10 @@
 		const result = await pickMediaFile();
 		if (result.kind === 'file') await ingest(result.file);
 		else if (result.kind === 'fallback') audioInput?.click();
+		else if (result.kind === 'error') {
+			error = result.message;
+			message = '';
+		}
 	}
 
 	async function onAudioInput(event: Event) {
@@ -144,7 +148,7 @@
 			// Use the loading store with appropriate message
 			const piece = await loading.withLoading(
 				() => openAudioFile(file),
-				`Processing ${file.name}...`,
+				'Processing audio...',
 				1000 // Show for at least 1 second for larger files
 			);
 			await goto(`/player/${piece.id}`);

@@ -213,6 +213,7 @@
 		const result = await pickMediaFile();
 		if (result.kind === 'file') await ingest(result.file);
 		else if (result.kind === 'fallback') fileInput?.click();
+		else if (result.kind === 'error') status = result.message;
 	}
 
 	async function onFileInput(event: Event) {
@@ -249,7 +250,7 @@
 				loadedHash = hash;
 				const token = ++attachToken;
 				await connect(file, token);
-			}, `Processing ${file.name}...`, 800);
+			}, 'Processing audio...', 800);
 			
 			status = '';
 		} catch {
@@ -607,9 +608,11 @@
 				/>
 
 				<div class="status-container">
-					{#if peaksStatus === 'loading' || status}
+					{#if $loading.isLoading || peaksStatus === 'loading' || status}
 						<div class="status-text">
-							{#if peaksStatus === 'loading'}
+							{#if $loading.isLoading}
+								{$loading.message}
+							{:else if peaksStatus === 'loading'}
 								Drawing waveform…
 							{:else if status}
 								{status}
@@ -728,7 +731,7 @@
 			<div class="popup-content" onclick={(e) => e.stopPropagation()}>
 				<h2>Attach Audio File</h2>
 				<p>Attach the audio for this piece. Cues stay saved, and opening the same file brings them back.</p>
-				{#if status === NOT_MEDIA_MESSAGE}
+				{#if status === NOT_MEDIA_MESSAGE || status.startsWith('Could not')}
 					<p class="popup-error">{status}</p>
 				{/if}
 				<div class="popup-buttons">
