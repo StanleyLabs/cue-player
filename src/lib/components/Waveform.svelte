@@ -759,8 +759,8 @@
 	}
 
 	.control-btn.active {
-		background: rgba(226, 255, 87, 0.15);
-		border-color: rgba(226, 255, 87, 0.4);
+		background: var(--accent-rgba-15);
+		border-color: var(--accent-rgba-40);
 		color: var(--accent);
 	}
 
