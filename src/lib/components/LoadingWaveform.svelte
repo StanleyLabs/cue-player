@@ -38,15 +38,16 @@
 </script>
 
 {#if show}
-	<div 
-		class="loading-indicator" 
-		role="status" 
-		aria-label={message}
-		onclick={allowDismiss ? handleDismiss : undefined}
-		onkeydown={handleKeydown}
-		tabindex={allowDismiss ? 0 : -1}
-		title={message}
-	>
+	<div role="status" aria-label={message}>
+		<button
+			class="loading-indicator"
+			type="button"
+			aria-label={message}
+			onclick={allowDismiss ? handleDismiss : undefined}
+			onkeydown={allowDismiss ? handleKeydown : undefined}
+			disabled={!allowDismiss}
+			title={message}
+		>
 		<div class="loading-icon">
 			<svg class="waveform-svg" width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="white" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
 				<!-- Individual animated waveform bars -->
@@ -56,6 +57,7 @@
 				<rect class="wave-bar" x="38" y="20" width="8" height="8" fill="white" rx="1" style:--delay="0.4s" />
 			</svg>
 		</div>
+		</button>
 	</div>
 {/if}
 
@@ -69,12 +71,14 @@
 		flex-direction: column;
 		align-items: end;
 		gap: 6px;
-		pointer-events: none;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: inherit;
 		animation: fade-in 0.4s ease-out;
 	}
 
-	.loading-indicator[tabindex="0"] {
-		pointer-events: auto;
+	.loading-indicator:not(:disabled) {
 		cursor: pointer;
 	}
 

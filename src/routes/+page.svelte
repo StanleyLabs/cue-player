@@ -121,10 +121,6 @@
 		const result = await pickMediaFile();
 		if (result.kind === 'file') await ingest(result.file);
 		else if (result.kind === 'fallback') audioInput?.click();
-		else if (result.kind === 'error') {
-			error = result.message;
-			message = '';
-		}
 	}
 
 	async function onAudioInput(event: Event) {
@@ -148,8 +144,7 @@
 			// Use the loading store with appropriate message
 			const piece = await loading.withLoading(
 				() => openAudioFile(file),
-				'Processing audio...',
-				1000 // Show for at least 1 second for larger files
+				'Processing audio...'
 			);
 			await goto(`/player/${piece.id}`);
 		} catch (err) {
@@ -167,7 +162,7 @@
 			const result = await loading.withLoading(async () => {
 				const text = await file.text();
 				return importBackup(text);
-			}, 'Importing backup...', 500);
+			}, 'Importing backup...');
 			
 			pieces = listPieces();
 			message = `Restored ${result.added + result.updated} pieces.`;
@@ -308,14 +303,24 @@
 				{#each pieces as piece (piece.id)}
 					<li 
 						class:clickable={renamingId !== piece.id && pendingDelete !== piece.id}
-						onclick={(event) => {
+					>
+						<div
+							class="piece-row"
+							onclick={(event) => {
 							// Only navigate if not in rename/delete mode and not clicking on buttons
 							if (renamingId === piece.id || pendingDelete === piece.id) return;
 							const target = event.target as HTMLElement;
 							if (target.closest('button') || target.closest('.piece-actions')) return;
 							goto(`/player/${piece.id}`);
-						}}
-					>
+							}}
+							role="link"
+							tabindex={renamingId !== piece.id && pendingDelete !== piece.id ? 0 : undefined}
+							onkeydown={(event) => {
+								if (event.key === 'Enter' && renamingId !== piece.id && pendingDelete !== piece.id) {
+									goto(`/player/${piece.id}`);
+								}
+							}}
+						>
 						{#if renamingId === piece.id}
 							<div class="piece-content">
 								<input
@@ -363,6 +368,7 @@
 								</div>
 							</div>
 						{/if}
+						</div>
 					</li>
 				{/each}
 			</ul>
@@ -390,11 +396,6 @@
 		-webkit-text-fill-color: transparent;
 		background-clip: text;
 		letter-spacing: -0.04em;
-	}
-
-	.library-head .eyebrow {
-		font-weight: 600;
-		letter-spacing: 0.12em;
 	}
 
 	main.scroll {
@@ -600,17 +601,6 @@
 		font-size: 0.95rem;
 	}
 
-	.status.reading {
-		margin-top: 16px;
-		padding: 0;
-		border: none;
-		border-radius: 0;
-		background: none;
-		color: var(--muted);
-		font-weight: 500;
-		animation: status-pulse 2s ease-in-out infinite;
-	}
-
 	.status.error {
 		border-left-color: var(--danger);
 		background: rgba(255, 141, 122, 0.05);
@@ -623,20 +613,6 @@
 		50% {
 			opacity: 1;
 		}
-	}
-
-	.btn-row {
-		gap: 12px;
-	}
-
-	.btn-row .btn {
-		font-weight: 600;
-		transition: all 0.2s ease;
-	}
-
-	.btn-row .btn:hover:not(:disabled) {
-		transform: translateY(-1px);
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 	}
 
 	.button-layout {

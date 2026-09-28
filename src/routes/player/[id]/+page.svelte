@@ -213,7 +213,6 @@
 		const result = await pickMediaFile();
 		if (result.kind === 'file') await ingest(result.file);
 		else if (result.kind === 'fallback') fileInput?.click();
-		else if (result.kind === 'error') status = result.message;
 	}
 
 	async function onFileInput(event: Event) {
@@ -250,7 +249,7 @@
 				loadedHash = hash;
 				const token = ++attachToken;
 				await connect(file, token);
-			}, 'Processing audio...', 800);
+			}, 'Processing audio...');
 			
 			status = '';
 		} catch {
@@ -264,8 +263,7 @@
 		try {
 			const created = await loading.withLoading(
 				() => openAudioFile(pendingFile!),
-				'Creating new cue list...',
-				1000
+				'Creating new cue list...'
 			);
 			await goto(`/player/${created.id}`);
 		} catch {
@@ -659,9 +657,17 @@
 			>
 				<div 
 					class="cue-list-header"
+					role="button"
+					tabindex="0"
 					onclick={(event) => {
 						const target = event.target as HTMLElement;
 						if (target.closest('button')) return;
+						cueListExpanded = !cueListExpanded;
+					}}
+					onkeydown={(event) => {
+						if (event.key !== 'Enter' && event.key !== ' ') return;
+						if ((event.target as HTMLElement).closest('button')) return;
+						event.preventDefault();
 						cueListExpanded = !cueListExpanded;
 					}}
 				>
@@ -724,9 +730,9 @@
 
 	<!-- Attach Audio Popup -->
 	{#if showAttachPopup}
-		<div class="popup-overlay" onclick={() => showAttachPopup = false}>
-			<div class="popup-content" onclick={(e) => e.stopPropagation()}>
-				<h2>Attach Audio File</h2>
+		<div class="popup-overlay" role="button" tabindex="0" aria-label="Close attach audio dialog" onclick={() => showAttachPopup = false} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (showAttachPopup = false)}>
+			<div class="popup-content" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="attach-audio-title" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
+				<h2 id="attach-audio-title">Attach Audio File</h2>
 				<p>Attach the audio for this piece. Cues stay saved, and opening the same file brings them back.</p>
 				{#if status === NOT_MEDIA_MESSAGE || status.startsWith('Could not')}
 					<p class="popup-error">{status}</p>

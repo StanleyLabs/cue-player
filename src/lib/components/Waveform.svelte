@@ -683,6 +683,7 @@
 		onpointercancel={zoomLevel > 1 ? onPanBarUp : undefined}
 		role="slider"
 		aria-label="Pan position"
+		aria-valuenow={duration > 0 ? (visibleStart / duration) * 100 : 0}
 		tabindex={zoomLevel > 1 ? 0 : -1}
 	>
 		{#if zoomLevel > 1}
