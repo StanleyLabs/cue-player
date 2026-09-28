@@ -614,7 +614,7 @@
 					class="cue-btn"
 					class:dragging={draggedCue === cue.id && cueDragMoved}
 					class:preparing-drag={draggedCue === cue.id && !isDragReady && dragTimer !== null}
-					style:left="{((cue.time - visibleStart) / visibleDuration) * 100}%"
+					style:--cue-x="{((cue.time - visibleStart) / visibleDuration) * 100}cqw"
 					style:--cue-color={cue.color}
 					title="{cue.name} - {cue.time.toFixed(1)}s"
 					onclick={(event) => handleCueClick(event, cue)}
@@ -836,11 +836,14 @@
 		height: 40px;
 		margin-bottom: 8px;
 		overflow: visible;
+		container-type: inline-size;
 	}
 
 	.cue-btn {
 		position: absolute;
-		transform: translateX(-50%);
+		left: 0;
+		/* Center on the cue. The stage has 24px of margin, so the label may hang 12px past the waveform. */
+		translate: clamp(-12px, calc(var(--cue-x) - 50%), calc(100cqw - 100% + 12px)) 0;
 		height: 32px;
 		padding: 0 12px;
 		border-radius: 16px;
@@ -865,7 +868,7 @@
 	}
 
 	.cue-btn:hover {
-		transform: translateX(-50%) translateY(-1px);
+		transform: translateY(-1px);
 		box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 		z-index: 1;
 	}
@@ -879,19 +882,19 @@
 		transition: none;
 		z-index: 2;
 		cursor: grabbing;
-		transform: translateX(-50%) translateY(-1px) scale(1.05);
+		transform: translateY(-1px) scale(1.05);
 	}
 
 	@keyframes drag-prepare {
 		0% {
-			transform: translateX(-50%) scale(1);
+			transform: scale(1);
 		}
 		50% {
-			transform: translateX(-50%) scale(1.02);
+			transform: scale(1.02);
 			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 		}
 		100% {
-			transform: translateX(-50%) scale(1.05);
+			transform: scale(1.05);
 			box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
 		}
 	}
