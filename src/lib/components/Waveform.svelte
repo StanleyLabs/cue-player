@@ -614,7 +614,6 @@
 					class="cue-btn"
 					class:dragging={draggedCue === cue.id && cueDragMoved}
 					class:preparing-drag={draggedCue === cue.id && !isDragReady && dragTimer !== null}
-					class:disabled-by-drag={isDragging || panBarDragging || followPlayhead}
 					style:left="{((cue.time - visibleStart) / visibleDuration) * 100}%"
 					style:--cue-color={cue.color}
 					title="{cue.name} - {cue.time.toFixed(1)}s"
@@ -881,11 +880,6 @@
 		z-index: 2;
 		cursor: grabbing;
 		transform: translateX(-50%) translateY(-1px) scale(1.05);
-	}
-
-	.cue-btn.disabled-by-drag {
-		opacity: 0.5;
-		pointer-events: none;
 	}
 
 	@keyframes drag-prepare {
