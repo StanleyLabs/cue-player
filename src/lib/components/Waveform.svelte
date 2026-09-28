@@ -40,8 +40,9 @@
 	// Touch gesture state
 	let touchStartDistance = $state(0);
 	let touchStartZoom = $state(1);
-	let touchStartPan = $state(0);
-	let touchStartCenter = $state(0);
+	// Audio time under the pinch midpoint when the gesture began. Zoom and pan
+	// keep this time under the midpoint so the waveform stays on the fingers.
+	let pinchFocalTime = 0;
 	let activeTouches = $state(0);
 	let followPlayhead = $state(false);
 	// A two-finger gesture only zooms and pans. Playhead seeks stay on a one-finger drag.
@@ -412,46 +413,36 @@
 			beginPinch();
 			touchStartDistance = getTouchDistance(event.touches);
 			touchStartZoom = zoomLevel;
-			touchStartPan = panOffset;
-			touchStartCenter = getTouchCenter(event.touches);
+			const rect = canvas?.getBoundingClientRect();
+			if (rect && rect.width > 0 && visibleDuration > 0) {
+				const ratio = (getTouchCenter(event.touches) - rect.left) / rect.width;
+				pinchFocalTime = visibleStart + ratio * visibleDuration;
+			}
 		}
 	}
 
 	function onTouchMove(event: TouchEvent) {
-		if (event.touches.length === 2) {
-			// Two finger pinch zoom and pan
-			event.preventDefault();
-			
-			const currentDistance = getTouchDistance(event.touches);
-			const scale = currentDistance / touchStartDistance;
-			const newZoom = clamp(touchStartZoom * scale, 1, 32);
-			
-			// Calculate pan based on touch center movement
-			const rect = canvas?.getBoundingClientRect();
-			if (rect) {
-				const currentCenter = getTouchCenter(event.touches);
-				
-				// Calculate how far the touch center has moved in pixels
-				const centerDeltaX = currentCenter - touchStartCenter;
-				
-				// Convert pixel movement to time delta
-				const timeDelta = (centerDeltaX / rect.width) * (duration / touchStartZoom);
-				
-				// Apply the movement: subtract because we want natural pan direction
-				// (when you drag right, you want to see earlier content on the left)
-				const newPanOffset = touchStartPan - timeDelta;
-				
-				zoomLevel = newZoom;
-				panOffset = clamp(newPanOffset, 0, duration - (duration / newZoom));
-			}
-		}
+		if (event.touches.length !== 2 || touchStartDistance <= 0 || duration <= 0) return;
+		// Two finger pinch zoom and pan, anchored on the midpoint between the fingers.
+		event.preventDefault();
+
+		const rect = canvas?.getBoundingClientRect();
+		if (!rect || rect.width <= 0) return;
+
+		const scale = getTouchDistance(event.touches) / touchStartDistance;
+		const newZoom = clamp(touchStartZoom * scale, 1, 32);
+		const newVisible = duration / newZoom;
+		const ratio = (getTouchCenter(event.touches) - rect.left) / rect.width;
+
+		zoomLevel = newZoom;
+		// Keep the time that was under the pinch center under the center as it moves.
+		panOffset = clamp(pinchFocalTime - ratio * newVisible, 0, Math.max(0, duration - newVisible));
 	}
 
 	function onTouchEnd(event: TouchEvent) {
 		activeTouches = event.touches.length;
 		if (event.touches.length === 0) {
 			touchStartDistance = 0;
-			touchStartCenter = 0;
 		}
 	}
 
