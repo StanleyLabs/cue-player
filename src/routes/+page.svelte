@@ -6,7 +6,9 @@
 	import { recallFile } from '$lib/storage/session';
 	import { deletePiece, downloadBackup, importBackup, listPieces, mutatePiece, openAudioFile } from '$lib/storage/library';
 	import type { Piece } from '$lib/storage/types';
+	import { loading, showAudioLoading, showNetworkLoading } from '$lib/stores/loading';
 	import { Settings } from '@lucide/svelte';
+	import { browser, dev } from '$app/environment';
 
 	let pieces = $state<Piece[]>(listPieces());
 	let message = $state('');
@@ -134,35 +136,41 @@
 			message = '';
 			return;
 		}
-		busy = true;
+		
 		error = '';
-		message = 'Reading audio…';
+		message = '';
+		
 		try {
-			const piece = await openAudioFile(file);
+			// Use the loading store with appropriate message
+			const piece = await loading.withLoading(
+				() => openAudioFile(file),
+				`Processing ${file.name}...`,
+				1000 // Show for at least 1 second for larger files
+			);
 			await goto(`/player/${piece.id}`);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Could not read that audio file.';
-			message = '';
-		} finally {
-			busy = false;
 		}
 	}
 
-	function onBackupInput(event: Event) {
+	async function onBackupInput(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
 		const file = input.files?.[0];
 		input.value = '';
 		if (!file) return;
-		void file.text().then((text) => {
-			try {
-				const result = importBackup(text);
-				pieces = listPieces();
-				message = `Restored ${result.added + result.updated} pieces.`;
-				error = '';
-			} catch (err) {
-				error = err instanceof Error ? err.message : 'Could not import that backup.';
-			}
-		});
+		
+		try {
+			const result = await loading.withLoading(async () => {
+				const text = await file.text();
+				return importBackup(text);
+			}, 'Importing backup...', 500);
+			
+			pieces = listPieces();
+			message = `Restored ${result.added + result.updated} pieces.`;
+			error = '';
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Could not import that backup.';
+		}
 	}
 
 	function saveTitle(piece: Piece, value: string) {
@@ -176,6 +184,21 @@
 		deletePiece(id);
 		pendingDelete = null;
 		pieces = listPieces();
+	}
+
+	// Development helpers for testing loading states
+	async function testLoadingAnimation(type: 'audio' | 'network' | 'custom') {
+		const messages = {
+			audio: 'Processing audio...',
+			network: 'Connecting...',
+			custom: 'Generating waveform...'
+		};
+		
+		await loading.withSlowNetwork(
+			() => new Promise(resolve => setTimeout(resolve, 100)),
+			messages[type],
+			3000 // 3 second delay for demo
+		);
 	}
 </script>
 
@@ -222,16 +245,54 @@
 				<button type="button" class="btn btn-small" onclick={() => backupInput?.click()}>Import backup</button>
 			</div>
 			<div class="main-action">
-				<button type="button" class="btn btn-primary btn-large" onclick={chooseAudio} disabled={busy}>
-					{busy ? 'Reading…' : 'Import audio'}
+				<button type="button" class="btn btn-primary btn-large" onclick={chooseAudio} disabled={$loading.isLoading}>
+					{$loading.isLoading ? 'Processing…' : 'Import audio'}
 				</button>
 			</div>
 		</div>
 		{#if message}
-			<p class="status" class:reading={busy} aria-live="polite">{message}</p>
+			<p class="status" aria-live="polite">{message}</p>
 		{/if}
 		{#if error}
 			<p class="status error" aria-live="assertive">{error}</p>
+		{/if}
+
+		<!-- Development only: Test loading animations -->
+		{#if dev}
+			<section class="dev-section">
+				<details>
+					<summary>🔧 Developer Tools</summary>
+					<div class="dev-content">
+						<p class="dev-label">Test Loading Animations:</p>
+						<div class="dev-buttons">
+							<button 
+								type="button" 
+								class="btn btn-small" 
+								onclick={() => testLoadingAnimation('audio')}
+								disabled={$loading.isLoading}
+							>
+								Audio Processing
+							</button>
+							<button 
+								type="button" 
+								class="btn btn-small" 
+								onclick={() => testLoadingAnimation('network')}
+								disabled={$loading.isLoading}
+							>
+								Network Slow
+							</button>
+							<button 
+								type="button" 
+								class="btn btn-small" 
+								onclick={() => testLoadingAnimation('custom')}
+								disabled={$loading.isLoading}
+							>
+								Custom Task
+							</button>
+						</div>
+					</div>
+				</details>
+			</section>
 		{/if}
 
 		{#if pieces.length === 0}
@@ -672,5 +733,63 @@
 	.btn-primary {
 		background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
 		box-shadow: 0 2px 8px var(--accent-rgba-30);
+	}
+
+	/* Development section styles */
+	.dev-section {
+		margin-top: 40px;
+		padding: 20px;
+		border-radius: 16px;
+		background: rgba(255, 141, 122, 0.05);
+		border: 1px solid rgba(255, 141, 122, 0.2);
+	}
+
+	.dev-section details {
+		cursor: pointer;
+	}
+
+	.dev-section summary {
+		font-weight: 600;
+		color: var(--danger);
+		font-size: 0.9rem;
+		margin-bottom: 16px;
+		list-style: none;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.dev-section summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.dev-content {
+		padding-left: 20px;
+	}
+
+	.dev-label {
+		color: var(--muted);
+		font-size: 0.85rem;
+		margin: 0 0 12px;
+		font-weight: 500;
+	}
+
+	.dev-buttons {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+
+	.dev-buttons .btn {
+		font-size: 0.8rem;
+		padding: 6px 12px;
+		min-height: 32px;
+	}
+
+	/* Hide dev section in production */
+	@media (min-width: 1px) {
+		.dev-section {
+			display: var(--dev-display, none);
+		}
 	}
 </style>

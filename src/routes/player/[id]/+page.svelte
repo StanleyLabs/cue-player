@@ -19,6 +19,7 @@
 	import { hashFile } from '$lib/storage/hash';
 	import { findByHash, getPiece, mutatePiece, openAudioFile } from '$lib/storage/library';
 	import type { Cue, EndBehavior, Piece } from '$lib/storage/types';
+	import { loading } from '$lib/stores/loading';
 
 	const engine = browser ? new AudioEngine() : null;
 
@@ -228,45 +229,46 @@
 			return;
 		}
 		enablePlaybackSession();
-		busy = true;
-		status = 'Reading audio…';
 		mismatchName = '';
+		
 		try {
-			const hash = await hashFile(file);
-			if (!piece || hash !== piece.fileHash) {
-				const other = hash ? findByHash(hash) : null;
-				if (other && !other.deletedAt) {
-					rememberFile(hash, file);
-					await goto(`/player/${other.id}`);
+			await loading.withLoading(async () => {
+				const hash = await hashFile(file);
+				if (!piece || hash !== piece.fileHash) {
+					const other = hash ? findByHash(hash) : null;
+					if (other && !other.deletedAt) {
+						rememberFile(hash, file);
+						await goto(`/player/${other.id}`);
+						return;
+					}
+					pendingFile = file;
+					mismatchName = file.name;
 					return;
 				}
-				pendingFile = file;
-				mismatchName = file.name;
-				status = '';
-				return;
-			}
-			rememberFile(hash, file);
-			loadedHash = hash;
-			const token = ++attachToken;
-			await connect(file, token);
+				rememberFile(hash, file);
+				loadedHash = hash;
+				const token = ++attachToken;
+				await connect(file, token);
+			}, `Processing ${file.name}...`, 800);
+			
 			status = '';
 		} catch {
 			status = 'Could not read that audio file.';
-		} finally {
-			busy = false;
 		}
 	}
 
 	async function importMismatch() {
 		if (!pendingFile) return;
-		busy = true;
+		
 		try {
-			const created = await openAudioFile(pendingFile);
+			const created = await loading.withLoading(
+				() => openAudioFile(pendingFile!),
+				'Creating new cue list...',
+				1000
+			);
 			await goto(`/player/${created.id}`);
 		} catch {
 			status = 'Could not open that file.';
-		} finally {
-			busy = false;
 		}
 	}
 
@@ -582,7 +584,7 @@
 					<section class="attach">
 						<p>{mismatchName} does not match this piece.</p>
 						<div class="btn-row">
-							<button type="button" class="btn btn-primary" onclick={importMismatch} disabled={busy}>
+							<button type="button" class="btn btn-primary" onclick={importMismatch} disabled={$loading.isLoading}>
 								Open as its own piece
 							</button>
 							<button type="button" class="btn" onclick={chooseFile}>Choose another file</button>
@@ -626,9 +628,9 @@
 								type="button" 
 								class="btn btn-primary attach-btn"
 								onclick={chooseFile}
-								disabled={busy}
+								disabled={$loading.isLoading}
 							>
-								{busy ? 'Reading…' : 'Attach audio'}
+								{$loading.isLoading ? 'Processing…' : 'Attach audio'}
 							</button>
 						{/if}
 					</div>
@@ -730,8 +732,8 @@
 					<p class="popup-error">{status}</p>
 				{/if}
 				<div class="popup-buttons">
-					<button type="button" class="btn btn-primary" onclick={chooseFile} disabled={busy}>
-						{busy ? 'Reading…' : 'Attach audio'}
+					<button type="button" class="btn btn-primary" onclick={chooseFile} disabled={$loading.isLoading}>
+						{$loading.isLoading ? 'Processing…' : 'Attach audio'}
 					</button>
 					<button type="button" class="btn btn-secondary" onclick={() => showAttachPopup = false}>
 						Cancel
