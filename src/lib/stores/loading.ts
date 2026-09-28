@@ -3,40 +3,28 @@ import { writable } from 'svelte/store';
 interface LoadingState {
 	isLoading: boolean;
 	message: string;
-	timeout?: number;
 }
 
 function createLoadingStore() {
-	const { subscribe, set, update } = writable<LoadingState>({
+	const { subscribe, set } = writable<LoadingState>({
 		isLoading: false,
 		message: 'Loading...'
 	});
 
-	let loadingTimeout: number | undefined;
 	let safetyTimeout: number | undefined;
 
 	return {
 		subscribe,
 		
-		show(message = 'Loading...', minDuration = 500) {
-			// Clear any existing timeouts
-			if (loadingTimeout) {
-				clearTimeout(loadingTimeout);
-			}
+		show(message = 'Loading...') {
 			if (safetyTimeout) {
 				clearTimeout(safetyTimeout);
 			}
 
 			set({
 				isLoading: true,
-				message,
-				timeout: minDuration
+				message
 			});
-
-			// Ensure loading shows for at least minDuration ms to prevent flickering
-			loadingTimeout = setTimeout(() => {
-				update(state => ({ ...state, timeout: undefined }));
-			}, minDuration);
 
 			// Safety timeout: force hide after 30 seconds to prevent infinite loading
 			safetyTimeout = setTimeout(() => {
@@ -46,35 +34,11 @@ function createLoadingStore() {
 		},
 
 		hide() {
-			update(state => {
-				// If we're within the minimum duration, don't hide yet
-				if (state.timeout !== undefined) {
-					return state;
-				}
-				
-				// Clear timeouts if they exist
-				if (loadingTimeout) {
-					clearTimeout(loadingTimeout);
-					loadingTimeout = undefined;
-				}
-				if (safetyTimeout) {
-					clearTimeout(safetyTimeout);
-					safetyTimeout = undefined;
-				}
-				
-				return {
-					...state,
-					isLoading: false
-				};
-			});
+			this.forceHide();
 		},
 
-		// Force hide regardless of timeout
+		// Force hide regardless of any pending timer
 		forceHide() {
-			if (loadingTimeout) {
-				clearTimeout(loadingTimeout);
-				loadingTimeout = undefined;
-			}
 			if (safetyTimeout) {
 				clearTimeout(safetyTimeout);
 				safetyTimeout = undefined;
@@ -89,17 +53,14 @@ function createLoadingStore() {
 		// Show loading for async operations
 		async withLoading<T>(
 			operation: () => Promise<T>, 
-			message = 'Loading...', 
-			minDuration = 500
+			message = 'Loading...'
 		): Promise<T> {
-			this.show(message, minDuration);
+			this.show(message);
 			
 			try {
-				const result = await operation();
-				return result;
+				return await operation();
 			} finally {
-				// Add a small delay to ensure the operation appears to complete
-				setTimeout(() => this.hide(), 150);
+				this.hide();
 			}
 		},
 
@@ -109,7 +70,7 @@ function createLoadingStore() {
 			message = 'Loading...', 
 			simulatedDelay = 2000
 		): Promise<T> {
-			this.show(message, 500);
+			this.show(message);
 			
 			// In development, add artificial delay to simulate slow networks
 			const isDev = import.meta.env.DEV;
@@ -119,7 +80,7 @@ function createLoadingStore() {
 					new Promise(resolve => setTimeout(resolve, simulatedDelay))
 				]);
 				
-				setTimeout(() => this.hide(), 150);
+				this.hide();
 				return result;
 			}
 			
@@ -133,15 +94,15 @@ export const loading = createLoadingStore();
 
 // Helper functions for common loading scenarios
 export function showAppLoading() {
-	loading.show('Initializing...', 800);
+	loading.show('Initializing...');
 }
 
 export function showAudioLoading() {
-	loading.show('Processing audio...', 1000);
+	loading.show('Processing audio...');
 }
 
 export function showNetworkLoading() {
-	loading.show('Connecting...', 600);
+	loading.show('Connecting...');
 }
 
 export function hideLoading() {
