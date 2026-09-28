@@ -44,6 +44,14 @@
 	let touchStartCenter = $state(0);
 	let activeTouches = $state(0);
 	let followPlayhead = $state(false);
+	// A two-finger gesture only zooms and pans. Playhead seeks stay on a one-finger drag.
+	let pinching = $state(false);
+	let touchPointerIds = new Set<number>();
+	let scrubPointerId: number | null = null;
+	let scrubOriginX = 0;
+	let scrubOriginY = 0;
+	let scrubbedDuringGesture = false;
+	let timeBeforeScrub = 0;
 	
 	// Cue dragging state
 	let draggedCue = $state<string | null>(null);
@@ -78,7 +86,7 @@
 
 	// Follow playhead when enabled - always center it
 	$effect(() => {
-		if (!followPlayhead || zoomLevel <= 1 || isDragging || panBarDragging) return;
+		if (!followPlayhead || zoomLevel <= 1 || isDragging || panBarDragging || pinching) return;
 		
 		// Always try to center the playhead in the view
 		const targetPanOffset = currentTime - visibleDuration / 2;
@@ -173,8 +181,45 @@
 		return visibleStart + ratio * visibleDuration;
 	}
 
+	const TOUCH_SCRUB_SLOP = 8;
+
+	function releaseScrubPointer() {
+		if (scrubPointerId != null && canvas?.hasPointerCapture(scrubPointerId)) {
+			canvas.releasePointerCapture(scrubPointerId);
+		}
+		scrubPointerId = null;
+	}
+
+	function beginPinch() {
+		// Mark the pinch before restoring, so follow-playhead does not chase a seek
+		// the second finger is about to undo.
+		pinching = true;
+		if (scrubbedDuringGesture) {
+			// The first finger may have already seeked before the second landed.
+			onscrub(timeBeforeScrub);
+			onscrubend();
+			scrubbedDuringGesture = false;
+		}
+		releaseScrubPointer();
+	}
+
 	function onPointerDown(event: PointerEvent) {
 		if (duration <= 0 || !canvas) return;
+
+		if (event.pointerType === 'touch') {
+			touchPointerIds.add(event.pointerId);
+			if (touchPointerIds.size >= 2 || pinching) {
+				beginPinch();
+				return;
+			}
+			timeBeforeScrub = currentTime;
+			scrubbedDuringGesture = false;
+			scrubOriginX = event.clientX;
+			scrubOriginY = event.clientY;
+			scrubPointerId = event.pointerId;
+			canvas.setPointerCapture(event.pointerId);
+			return;
+		}
 		
 		// Check if this is a pan gesture (right-click, middle mouse, or shift+click)
 		if (event.button === 2 || event.button === 1 || event.shiftKey) {
@@ -193,6 +238,7 @@
 	}
 
 	function onPointerMove(event: PointerEvent) {
+		if (pinching) return;
 		if (!canvas?.hasPointerCapture(event.pointerId)) return;
 		
 		if (isDragging) {
@@ -202,13 +248,41 @@
 			const timeDelta = (-dx / rect.width) * visibleDuration;
 			panOffset = clamp(panOffset + timeDelta, 0, duration - visibleDuration);
 			lastDragX = event.clientX;
-		} else {
-			// Regular scrubbing
-			onscrub(timeFromPointer(event));
+			return;
 		}
+
+		if (event.pointerType === 'touch') {
+			if (event.pointerId !== scrubPointerId || touchPointerIds.size !== 1) return;
+			const dx = event.clientX - scrubOriginX;
+			const dy = event.clientY - scrubOriginY;
+			if (!scrubbedDuringGesture && dx * dx + dy * dy < TOUCH_SCRUB_SLOP * TOUCH_SCRUB_SLOP) return;
+			scrubbedDuringGesture = true;
+		}
+
+		onscrub(timeFromPointer(event));
 	}
 
 	function onPointerUp(event: PointerEvent) {
+		if (event.pointerType === 'touch') {
+			touchPointerIds.delete(event.pointerId);
+			if (canvas?.hasPointerCapture(event.pointerId)) {
+				canvas.releasePointerCapture(event.pointerId);
+			}
+			if (pinching) {
+				if (event.pointerId === scrubPointerId) scrubPointerId = null;
+				if (touchPointerIds.size === 0) pinching = false;
+				return;
+			}
+			if (event.pointerId === scrubPointerId) {
+				// A tap still seeks. A second finger never reaches this path.
+				if (!scrubbedDuringGesture) onscrub(timeFromPointer(event));
+				onscrubend();
+				scrubPointerId = null;
+				scrubbedDuringGesture = false;
+			}
+			return;
+		}
+
 		if (canvas?.hasPointerCapture(event.pointerId)) {
 			canvas.releasePointerCapture(event.pointerId);
 		}
@@ -333,8 +407,9 @@
 		activeTouches = event.touches.length;
 		
 		if (event.touches.length === 2) {
-			// Two finger gesture - pinch zoom and pan
+			// Two finger gesture - pinch zoom and pan. Never seeks.
 			event.preventDefault();
+			beginPinch();
 			touchStartDistance = getTouchDistance(event.touches);
 			touchStartZoom = zoomLevel;
 			touchStartPan = panOffset;
